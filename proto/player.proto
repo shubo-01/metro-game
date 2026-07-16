@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package xunxian.player;
+
+option go_package = "xunxian/proto/player";
+
+// ═══════════════════════════════════════════
+//  角色服务 - 创建 / 查询 / 属性
+// ═══════════════════════════════════════════
+
+// 创建角色
+message CreateCharacterRequest {
+  string name = 1;     // 2-8汉字
+  int32  gender = 2;   // 1男 2女
+}
+
+message CreateCharacterResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  player_id = 3;
+  string name = 4;
+  int32  gender = 5;
+  PlayerAttrs attrs = 6;
+  int32  scene_id = 7;
+  float  pos_x = 8;
+  float  pos_y = 9;
+}
+
+// 查询角色信息
+message GetPlayerRequest {
+  int64 player_id = 1;
+}
+
+message GetPlayerResponse {
+  int32  code = 1;
+  string msg = 2;
+  PlayerInfo info = 3;
+}
+
+// 查询角色属性
+message GetPlayerAttrRequest {
+  int64 player_id = 1;
+}
+
+message GetPlayerAttrResponse {
+  int32  code = 1;
+  string msg = 2;
+  PlayerAttrs attrs = 3;
+  HiddenAttrs hidden_attrs = 4;
+}
+
+// 随机名称
+message RandomNameRequest {
+  int32 gender = 1;  // 可选，用于生成性别相关名称
+}
+
+message RandomNameResponse {
+  int32 code = 1;
+  string msg = 2;
+  string name = 3;
+}
+
+// 名称校验
+message ValidateNameRequest {
+  string name = 1;
+}
+
+message ValidateNameResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   valid = 3;
+}
+
+// ═══════════════════════════════════════════
+//  数据结构
+// ═══════════════════════════════════════════
+
+message PlayerInfo {
+  int64  player_id = 1;
+  int64  account_id = 2;
+  string name = 3;
+  int32  gender = 4;
+  int32  race = 5;         // 种族，初版只有人族
+  int32  level_stage = 6;  // 境界阶段：1人 2真人 3仙 4金仙
+  int32  level_tier = 7;   // 境界等级：1-9
+  int32  level_step = 8;   // 境界段位：1-10
+  int32  scene_id = 9;     // 当前场景ID
+  float  pos_x = 10;
+  float  pos_y = 11;
+  PlayerAttrs attrs = 12;
+  HiddenAttrs hidden_attrs = 13;
+  string status = 14;      // normal / public_enemy / thunder / ghost / beast
+}
+
+message PlayerAttrs {
+  int32 jing = 1;          // 精（肉身）
+  int32 qi_metal = 2;      // 金之气
+  int32 qi_wood = 3;       // 木之气
+  int32 qi_water = 4;      // 水之气
+  int32 qi_fire = 5;       // 火之气
+  int32 qi_earth = 6;      // 土之气
+  int32 shen = 7;          // 神（灵魂）
+  double luck = 8;         // 气运
+  double savvy = 9;        // 悟性
+}
+
+message HiddenAttrs {
+  int32 causality = 1;           // 因果（隐藏）
+  int32 inner_demon = 2;         // 心魔（隐藏）
+  int32 dao_age = 3;             // 道行（隐藏）
+  int32 tribulation_count = 4;   // 天劫次数（隐藏）
+}

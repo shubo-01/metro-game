@@ -1,0 +1,30 @@
+# Go 编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go 依赖缓存
+E:\GoPath/
+
+# protoc 二进制
+tools/protoc/bin/
+tools/protoc/include/
+
+# Node modules
+node_modules/
+frontend/temp/
+
+# IDE
+.idea/
+.vscode/
+.qoder/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 日志
+*.log

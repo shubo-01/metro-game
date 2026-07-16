@@ -1,0 +1,18 @@
+server:
+  port: 8002
+  name: player-service
+
+mysql:
+  dsn: "root:password@tcp(127.0.0.1:3306)/game_main?charset=utf8mb4&parseTime=true"
+  max_open_conns: 50
+  max_idle_conns: 10
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "xunxian-jwt-secret-key-change-in-prod"
+  access_expires: 2
+  refresh_expires: 7

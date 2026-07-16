@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package xunxian.auth;
+
+option go_package = "xunxian/proto/auth";
+
+// ═══════════════════════════════════════════
+//  认证服务 - 登录 / 绑定 / Token
+// ═══════════════════════════════════════════
+
+// 微信登录请求
+message WxLoginRequest {
+  string code = 1;       // wx.login 获取的 code
+  string device_id = 2;  // 设备唯一标识
+}
+
+message WxLoginResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+  bool   need_bind_phone = 5;  // 是否需要绑定手机号
+  string openid = 6;           // 未绑定时返回，用于后续绑定
+  bool   has_character = 7;    // 是否已创建角色
+  PlayerBrief player_info = 8; // 已有角色时返回
+}
+
+// 抖音登录请求
+message TtLoginRequest {
+  string code = 1;
+  string device_id = 2;
+}
+
+message TtLoginResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+  bool   need_bind_phone = 5;
+  string openid = 6;
+  bool   has_character = 7;
+  bool   need_confirm = 8;     // 是否需要确认跨平台关联
+  PlayerBrief player_info = 9;
+}
+
+// 手机号验证码登录
+message PhoneLoginRequest {
+  string phone = 1;
+  string code = 2;       // 短信验证码
+  string device_id = 3;
+}
+
+message PhoneLoginResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+  bool   has_character = 5;
+  PlayerBrief player_info = 6;
+}
+
+// 发送验证码
+message SendCodeRequest {
+  string phone = 1;
+  string purpose = 2;    // login / bind / reset
+}
+
+message SendCodeResponse {
+  int32 code = 1;
+  string msg = 2;
+  bool   success = 3;
+}
+
+// 绑定手机号
+message BindPhoneRequest {
+  string openid = 1;
+  string platform = 2;   // wechat / douyin / app_ios / app_android
+  string phone = 3;
+  string code = 4;       // 短信验证码
+}
+
+message BindPhoneResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+  bool   has_character = 5;
+  bool   need_confirm = 6;  // 跨平台关联确认
+  PlayerBrief player_info = 7;
+}
+
+// 确认跨平台关联
+message ConfirmBindRequest {
+  string openid = 1;
+  string platform = 2;
+  string phone = 3;
+}
+
+message ConfirmBindResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+  bool   has_character = 5;
+  PlayerBrief player_info = 6;
+}
+
+// Token 刷新
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  int32 code = 1;
+  string msg = 2;
+  string token = 3;
+  string refresh_token = 4;
+}
+
+// Token 校验
+message CheckTokenRequest {
+  string token = 1;
+}
+
+message CheckTokenResponse {
+  int32 code = 1;
+  string msg = 2;
+  int64  account_id = 3;
+  bool   has_character = 4;
+  PlayerBrief player_info = 5;
+}
+
+// 角色简要信息
+message PlayerBrief {
+  int64  player_id = 1;
+  string name = 2;
+  int32  gender = 3;
+  int32  level_stage = 4;
+  int32  level_tier = 5;
+  int32  level_step = 6;
+  int32  scene_id = 7;
+  float  pos_x = 8;
+  float  pos_y = 9;
+}

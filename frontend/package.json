@@ -1,0 +1,16 @@
+{
+  "name": "xunxian-frontend",
+  "version": "1.0.0",
+  "description": "寻仙 - Cocos Creator 3.8 前端",
+  "private": true,
+  "scripts": {
+    "gen:proto": "npx pbjs -t static-module -w commonjs -o assets/scripts/proto/proto-bundle.js ../proto/*.proto && npx pbts -o assets/scripts/proto/proto-bundle.d.ts assets/scripts/proto/proto-bundle.js"
+  },
+  "devDependencies": {
+    "protobufjs-cli": "^1.1.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "protobufjs": "^7.4.0"
+  }
+}

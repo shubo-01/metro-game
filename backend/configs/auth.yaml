@@ -1,0 +1,32 @@
+server:
+  port: 8001
+  name: auth-service
+
+mysql:
+  dsn: "root:password@tcp(127.0.0.1:3306)/game_main?charset=utf8mb4&parseTime=true"
+  max_open_conns: 50
+  max_idle_conns: 10
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "xunxian-jwt-secret-key-change-in-prod"
+  access_expires: 2
+  refresh_expires: 7
+
+wechat:
+  app_id: "your_wx_app_id"
+  app_secret: "your_wx_app_secret"
+
+douyin:
+  app_id: "your_tt_app_id"
+  app_secret: "your_tt_app_secret"
+
+ali_sms:
+  access_key_id: "your_ali_access_key"
+  access_key_secret: "your_ali_access_secret"
+  sign_name: "寻仙"
+  template_code: "SMS_123456789"
