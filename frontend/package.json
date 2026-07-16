@@ -12,5 +12,9 @@
   },
   "dependencies": {
     "protobufjs": "^7.4.0"
-  }
+  },
+  "creator": {
+    "version": "3.8.8"
+  },
+  "uuid": "582af2bd-c37c-416c-8b0a-b3935a68448e"
 }

@@ -14,7 +14,14 @@ tools/protoc/include/
 
 # Node modules
 node_modules/
+
+# Cocos Creator 生成目录（不提交）
 frontend/temp/
+frontend/library/
+frontend/profiles/
+frontend/settings/
+frontend/native/
+frontend/local/
 
 # IDE
 .idea/

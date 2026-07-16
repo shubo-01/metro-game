@@ -244,7 +244,7 @@ export class HallScene extends Component {
         }
     }
 
-    private async _interactNPC(npcCfg: { id: number; name: string; type: string }) {
+    private async _interactNPC(npcCfg: { id: number; name: string; x: number; y: number; type: string }) {
         if (!this._playerNode) return;
 
         const playerPos = this._playerNode.position;
