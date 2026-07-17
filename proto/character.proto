@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package xunxian.character;
+
+option go_package = "xunxian/proto/character";
+
+// ═══════════════════════════════════════════
+//  Character Service - 角色服务消息定义
+//  严格按照《人物系统技术方案》实现
+// ═══════════════════════════════════════════
+
+// 创建角色
+message CreateCharRequest {
+  string name = 1;    // 2-8汉字角色名
+  int32  gender = 2;  // 1=男 2=女
+}
+
+message CreateCharResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  character_id = 3;
+  string name = 4;
+  int32  gender = 5;
+  int32  race = 6;
+  CharacterAttrs attrs = 7;
+  RealmInfo realm = 8;
+}
+
+// 查询角色完整信息
+message GetCharInfoRequest {
+  int64 character_id = 1;
+}
+
+message GetCharInfoResponse {
+  int32  code = 1;
+  string msg = 2;
+  CharacterBase base = 3;
+  CharacterAttrs attrs = 4;
+  DerivedAttrs derived = 5;
+  RealmInfo realm = 6;
+  repeated QiElement qi_elements = 7;
+  int32  element_count = 8;
+  double exp_multiplier = 9;
+  double damage_multiplier = 10;
+}
+
+// 查询五维属性及衍生值
+message GetCharAttrsRequest {
+  int64 character_id = 1;
+}
+
+message GetCharAttrsResponse {
+  int32  code = 1;
+  string msg = 2;
+  BaseAttrs base_attrs = 3;
+  CurrentAttrs current = 4;
+  DerivedAttrs derived = 5;
+}
+
+// 增加经验
+message AddExpRequest {
+  int64 character_id = 1;
+  int64 exp_jing = 2;    // 精属性经验
+  int64 exp_qi = 3;      // 气属性经验
+  int64 exp_shen = 4;    // 神属性经验
+}
+
+message AddExpResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  exp_jing = 3;
+  int64  exp_qi = 4;
+  int64  exp_shen = 5;
+  int64  exp_req = 6;
+  bool   can_upgrade = 7;
+  double multiplier = 8;
+}
+
+// 境界升级（小阶）
+message RealmUpgradeRequest {
+  int64 character_id = 1;
+}
+
+message RealmUpgradeResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  major_stage = 3;
+  int32  minor_stage = 4;
+}
+
+// 境界突破（大境界）
+message BreakthroughRequest {
+  int64 character_id = 1;
+}
+
+message BreakthroughResponse {
+  int32  code = 1;
+  string msg = 2;
+  string result = 3;       // success / xinmo_fail / tribulation_fail
+  int32  major_stage = 4;
+  int32  minor_stage = 5;
+  string stage_name = 6;
+}
+
+// 修炼五行属性
+message QiCultivateRequest {
+  int64 character_id = 1;
+  int32 element_type = 2;  // 1=金 2=木 3=水 4=火 5=土
+}
+
+message QiCultivateResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  element_type = 3;
+  string element_name = 4;
+  int32  element_count = 5;
+  double exp_multiplier = 6;
+}
+
+// 查询已修属性
+message GetQiElementsRequest {
+  int64 character_id = 1;
+}
+
+message GetQiElementsResponse {
+  int32  code = 1;
+  string msg = 2;
+  repeated QiElement elements = 3;
+  int32  element_count = 4;
+  double exp_multiplier = 5;
+  double damage_multiplier = 6;
+}
+
+// ═══════════════════════════════════════════
+//  数据结构
+// ═══════════════════════════════════════════
+
+message CharacterBase {
+  int64  character_id = 1;
+  int64  account_id = 2;
+  string name = 3;
+  int32  gender = 4;    // 1=男 2=女
+  int32  race = 5;      // 1=人族 2=鬼修 3=兽身
+  int32  form_state = 6; // 1=人形 2=兽形
+}
+
+message CharacterAttrs {
+  int32 jing = 1;       // 精（肉身强度）
+  int32 qi = 2;         // 气（修炼能量总和）
+  int32 shen = 3;       // 神（灵魂之力）
+  int32 qi_yun = 4;     // 气运（命运属性）
+  int32 wu_xing = 5;    // 悟性（成长天赋）
+  int32 hp_max = 6;     // 气血上限
+  int32 hp_current = 7; // 当前气血
+  int32 mp_max = 8;     // 灵力上限
+  int32 mp_current = 9; // 当前灵力
+  int32 soul_max = 10;  // 魂力上限（鬼修专用）
+  int32 soul_current = 11; // 当前魂力
+}
+
+message BaseAttrs {
+  int32 jing = 1;
+  int32 qi = 2;
+  int32 shen = 3;
+  int32 qi_yun = 4;
+  int32 wu_xing = 5;
+}
+
+message CurrentAttrs {
+  int32 hp_max = 1;
+  int32 hp_current = 2;
+  int32 mp_max = 3;
+  int32 mp_current = 4;
+  int32 soul_max = 5;
+  int32 soul_current = 6;
+}
+
+message DerivedAttrs {
+  int32 hp_max = 1;       // 气血上限 = 精×100
+  int32 mp_max = 2;       // 灵力上限 = 气×50
+  int32 soul_max = 3;     // 魂力上限 = 神×30
+  int32 physique = 4;     // 体魄 = 精×10
+  int32 agility = 5;      // 身法 = 精×5
+  int32 bone_base = 6;    // 根骨 = 精×8
+  int32 skill_power = 7;  // 功法威力 = 气×12
+  int32 sense_range = 8;  // 神识范围 = 神×15
+  int32 mental_wall = 9;  // 精神壁垒 = 神×8
+}
+
+message RealmInfo {
+  int32 major_stage = 1;     // 大境界：1=人阶 2=真人 3=仙 4=金仙
+  int32 minor_stage = 2;     // 小阶：1-9
+  int32 stage_segment = 3;   // 段格：0-9
+  int64 exp_jing = 4;
+  int64 exp_qi = 5;
+  int64 exp_shen = 6;
+  int32 xinmo_value = 7;     // 心魔值
+  int32 dao_xing = 8;        // 道行
+  int32 karma_value = 9;     // 因果值
+  int32 tribulation_count = 10;
+}
+
+message QiElement {
+  int32  element_type = 1;     // 1=金 2=木 3=水 4=火 5=土
+  string element_name = 2;     // 金/木/水/火/土
+  int32  proficiency = 3;
+  bool   is_cultivating = 4;
+  string started_at = 5;
+}

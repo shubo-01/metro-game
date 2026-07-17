@@ -1,6 +1,7 @@
 /**
  * 寻仙 - HTTP 客户端
  * 封装 HTTP 请求，自动携带 Token，401 自动刷新
+ * 支持多服务路由：根据请求路径前缀自动选择对应微服务地址
  */
 
 import { ServerConfig, TokenConfig } from '../common/Constants';
@@ -13,6 +14,7 @@ export interface ApiResponse<T = any> {
 }
 
 export class HttpClient {
+    /** 默认基础地址（认证/玩家服务） */
     private static _baseUrl: string = ServerConfig.DEV_HTTP_URL;
     private static _tokenManager: TokenManager;
 
@@ -24,9 +26,26 @@ export class HttpClient {
         HttpClient._baseUrl = url;
     }
 
+    /**
+     * 根据请求路径前缀自动选择对应微服务地址
+     * - /character/* → 角色服务（端口 8005）
+     * - /death/*     → 死亡服务（端口 8006）
+     * - 其他          → 默认认证服务（端口 8001）
+     */
+    private static _getServiceBaseUrl(path: string): string {
+        if (path.startsWith('/character/')) {
+            return ServerConfig.DEV_CHARACTER_URL;
+        }
+        if (path.startsWith('/death/')) {
+            return ServerConfig.DEV_DEATH_URL;
+        }
+        return HttpClient._baseUrl;
+    }
+
     /** GET 请求 */
     static async get<T = any>(path: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
-        let url = `${HttpClient._baseUrl}${path}`;
+        const baseUrl = HttpClient._getServiceBaseUrl(path);
+        let url = `${baseUrl}${path}`;
         if (params) {
             const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
             url += `?${qs}`;
@@ -36,7 +55,8 @@ export class HttpClient {
 
     /** POST 请求 */
     static async post<T = any>(path: string, body?: any): Promise<ApiResponse<T>> {
-        const url = `${HttpClient._baseUrl}${path}`;
+        const baseUrl = HttpClient._getServiceBaseUrl(path);
+        const url = `${baseUrl}${path}`;
         return HttpClient._request<T>(url, 'POST', body);
     }
 

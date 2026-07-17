@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package xunxian.death;
+
+option go_package = "xunxian/proto/death";
+
+// ═══════════════════════════════════════════
+//  Death Service - 死亡服务消息定义
+//  涵盖：死亡触发、六道轮回、鬼修、夺舍、兽身、遗迹洞府、公敌
+// ═══════════════════════════════════════════
+
+// 触发死亡
+message DeathTriggerRequest {
+  int64 character_id = 1;
+  int32 death_type = 2;    // 1=自由探索死 2=魂飞魄散 3=夺舍失败
+  bool  is_dungeon = 3;    // true=副本内死亡（不触发死亡机制）
+  int32 location_x = 4;
+  int32 location_y = 5;
+}
+
+message DeathTriggerResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   is_dungeon_death = 3;
+  repeated string options = 4; // reincarnation / ghost_cultivation
+}
+
+// 六道轮回
+message ReincarnationRequest {
+  int64 character_id = 1;
+  bool  force_beast = 2;   // true=三次夺舍强制变兽
+}
+
+message ReincarnationResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  reincarnation_type = 3; // 1=天道...6=地狱道
+  string reincarnation_name = 4;
+  BaseAttrs new_attrs = 5;
+  bool   is_beast = 6;
+}
+
+// 进入鬼修
+message GhostEnterRequest {
+  int64 character_id = 1;
+}
+
+message GhostEnterResponse {
+  int32 code = 1;
+  string msg = 2;
+  int32 ghost_mode = 3;
+  int32 soul_hp_max = 4;
+  int32 soul_hp_current = 5;
+}
+
+// 鬼修重聚肉身
+message GhostExitRequest {
+  int64 character_id = 1;
+}
+
+message GhostExitResponse {
+  int32  code = 1;
+  string msg = 2;
+}
+
+// 发起夺舍
+message PossessStartRequest {
+  int64  character_id = 1;
+  int32  target_type = 2;   // 1=NPC 2=玩家
+  int64  target_id = 3;
+  string target_name = 4;
+}
+
+message PossessStartResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   success = 3;
+  double success_rate = 4;
+  int32  possessor_shen = 5;
+  int32  target_shen = 6;
+}
+
+// 夺舍结算
+message PossessResultRequest {
+  int64 character_id = 1;
+  bool  success = 2;
+  int64 target_id = 3;
+}
+
+message PossessResultResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   is_public_enemy = 3;
+  bool   force_beast = 4;
+  int32  possess_count = 5;
+  int32  plundered_shen = 6;
+  bool   must_reincarnate = 7;
+}
+
+// 兽身化形切换
+message BeastTransformRequest {
+  int64 character_id = 1;
+  bool  to_human = 2;      // true=化为人形 false=变为兽形
+}
+
+message BeastTransformResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  current_form = 3;    // 1=兽形 2=人形
+  double jing_multiplier = 4; // 1.5 or 1.0
+}
+
+// 创建遗迹洞府
+message RuinsCreateRequest {
+  int64 character_id = 1;
+  int32 location_x = 2;
+  int32 location_y = 3;
+  int64 total_wealth = 4;
+  int32 restriction_level = 5; // 禁制等级 0-9
+}
+
+message RuinsCreateResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  ruin_id = 3;
+  int32  restriction_level = 4;
+  int32  expires_in_days = 5;
+}
+
+// 继承遗迹洞府
+message RuinsInheritRequest {
+  int64 ruin_id = 1;
+  int64 character_id = 2;
+  int32 break_level = 3;     // 尝试突破的禁制等级
+}
+
+message RuinsInheritResponse {
+  int32  code = 1;
+  string msg = 2;
+}
+
+// 查询角色死亡状态（含夺舍次数/鬼修/兽身等完整状态）
+message DeathStateRequest {
+  int64 character_id = 1;
+}
+
+message DeathStateResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   is_dead = 3;              // 是否死亡中
+  int32  death_type = 4;           // 死亡类型：1=自由探索死 2=魂飞魄散 3=夺舍失败
+  int32  ghost_mode = 5;           // 灵魂模式：0=正常 1=鬼修 2=残魂
+  int32  soul_hp_max = 6;          // 魂力上限（鬼修专用）
+  int32  soul_hp_current = 7;      // 当前魂力
+  int32  possess_count = 8;        // 已夺舍次数（上限3）
+  int32  possess_remaining = 9;    // 剩余夺舍次数
+  int32  beast_form = 10;          // 兽身状态：0=非兽身 1=兽身
+  int32  beast_can_transform = 11; // 是否可化形
+  bool   is_public_enemy = 12;     // 是否为公敌
+  string public_enemy_until = 13;  // 公敌状态结束时间
+  string thunder_penalty_next = 14; // 下次天雷处罚时间
+}
+
+// 查询公敌状态
+message PublicEnemyStatusRequest {
+  int64 character_id = 1;
+}
+
+message PublicEnemyStatusResponse {
+  int32  code = 1;
+  string msg = 2;
+  bool   is_public_enemy = 3;
+  int32  reason = 4;
+  int64  bounty_total = 5;
+  int32  thunder_count = 6;
+  string next_thunder_at = 7;
+  int32  thunder_remaining_seconds = 8;
+}
+
+// ═══════════════════════════════════════════
+//  公共数据结构
+// ═══════════════════════════════════════════
+
+message BaseAttrs {
+  int32 jing = 1;
+  int32 qi = 2;
+  int32 shen = 3;
+  int32 qi_yun = 4;
+  int32 wu_xing = 5;
+}
