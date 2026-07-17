@@ -1,0 +1,348 @@
+====================================================================================================
+# 技术方案-花果山副本
+文件: E:\AIshubo\mePRD\word\寻仙 - 花果山副本技术方案.docx
+====================================================================================================
+[P1][] 寻仙
+[P2][] 花果山副本 · 驱逐混世魔王
+[P3][] 技术方案
+[P4][] Go微服务 · Cocos Creator · MySQL · Redis
+[P5][] 2026年7月16日
+[P7][Title] 目录
+[P9][Heading 1] 架构总览
+[P10][Heading 2] 技术栈选型
+[P12][Heading 2] 系统架构图
+[P13][] 客户端 (Cocos Creator) → API网关 (Gin) → 微服务集群 (Kratos) → MySQL/Redis/OSS
+[P14][] 实时战斗走独立 WebSocket 通道，与 HTTP API 分离。场景内逻辑在服务端计算，客户端只做表现层渲染和输入上报。
+[P15][Heading 1] 数据库设计
+[P16][Heading 2] 核心表结构
+[P17][Heading 3] 玩家表 player
+[P18][] player_id      BIGINT PRIMARY KEY AUTO_INCREMENT
+[P19][] platform       TINYINT      -- 1=微信 2=抖音 3=App
+[P20][] platform_uid   VARCHAR(128) -- 平台唯一ID
+[P21][] nickname       VARCHAR(64)
+[P22][] avatar_url     VARCHAR(256)
+[P23][] luck           DECIMAL(4,2) DEFAULT 0  -- 运气值
+[P24][] comprehension  DECIMAL(4,1) DEFAULT 0  -- 悟性
+[P25][] created_at     DATETIME
+[P26][] UNIQUE KEY uk_platform (platform, platform_uid)
+[P27][Heading 3] 玩家属性表 player_attr
+[P28][] player_id    BIGINT PRIMARY KEY
+[P29][] hp_max       INT
+[P30][] mp_max       INT
+[P31][] atk          INT
+[P32][] def          INT
+[P33][] spd          INT
+[P34][] crit_rate    DECIMAL(4,2)
+[P35][] crit_dmg     DECIMAL(4,2)
+[P36][] fatigue_sec  INT DEFAULT 18000  -- 当日剩余牢结值(秒), 5h=18000s
+[P37][Heading 3] 场景会话表 scene_session
+[P38][] session_id    BIGINT PRIMARY KEY AUTO_INCREMENT
+[P39][] player_id     BIGINT
+[P40][] scene_id      INT          -- 场景ID(花果山=1)
+[P41][] role_type     TINYINT      -- 1=大圣 2=魔王 3=手下 4=猴子 5=老猴 6=草木石头
+[P42][] enter_x       DECIMAL(8,4) -- 进入时地图坐标X
+[P43][] enter_y       DECIMAL(8,4) -- 进入时地图坐标Y
+[P44][] start_at      DATETIME
+[P45][] end_at        DATETIME
+[P46][] duration_sec  INT          -- 实际存活时长
+[P47][] outcome       TINYINT      -- 1=完胜 2=受伤 3=死亡 4=生存成功 5=观测完成
+[P48][] death_id      INT          -- 死亡方式ID(死亡时填写)
+[P49][] observe_score INT          -- 观测度(草木石头专用)
+[P50][] INDEX idx_player (player_id, start_at)
+[P51][Heading 3] 牢结值日志表 fatigue_log
+[P52][] log_id        BIGINT PRIMARY KEY AUTO_INCREMENT
+[P53][] player_id     BIGINT
+[P54][] date          DATE
+[P55][] online_sec    INT      -- 当日在线时长
+[P56][] consume_sec   INT      -- 当日消耗牢结值
+[P57][] recover_sec   INT      -- 当日打坐恢复
+[P58][] UNIQUE KEY uk_player_date (player_id, date)
+[P59][Heading 3] 背包表 inventory
+[P60][] inv_id        BIGINT PRIMARY KEY AUTO_INCREMENT
+[P61][] player_id     BIGINT
+[P62][] item_id       INT          -- 物品ID
+[P63][] item_type     TINYINT      -- 1=材料 2=功法残卷 3=兵器残块 4=铠甲残块 5=稀有 6=唯一性
+[P64][] quantity      INT DEFAULT 1
+[P65][] obtained_at   DATETIME
+[P66][] source        VARCHAR(32)  -- 来源(如 huaguoshan_wukong)
+[P67][] INDEX idx_player_type (player_id, item_type)
+[P68][Heading 3] 死亡方式表 death_descriptions
+[P69][] death_id      INT PRIMARY KEY
+[P70][] role_type     TINYINT      -- 3=手下 4=猴子 5=老猴 6=草木石头
+[P71][] category      VARCHAR(16)  -- 分类(被大圣攻击/被波及/恐惧/环境...)
+[P72][] description   VARCHAR(256) -- 死亡描述
+[P73][] INDEX idx_role (role_type)
+[P75][Heading 2] 分库策略
+[P76][Heading 1] 随机身份入场系统
+[P77][Heading 2] 概率计算逻辑
+[P78][] 服务端计算，不在客户端抓，防作弊。
+[P79][Heading 3] 计算流程
+[P80][] // Go 伪代码
+[P81][] func CalcProbs(luck float64) map[int]float64 {
+[P82][] wkProb := 0.01 * (1 + luck)  // 孙悟空
+[P83][] mwProb := 0.09 * (1 + luck)  // 魔王
+[P84][] extra  := (wkProb - 0.01) + (mwProb - 0.09)
+[P85][] poolSum := 0.30 + 0.35 + 0.10 + 0.15  // 0.90
+[P86][] // 四角色按比例扣除
+[P87][] probs[3] = 0.30 - extra * (0.30 / poolSum)  // 手下
+[P88][] probs[4] = 0.35 - extra * (0.35 / poolSum)  // 猴子
+[P89][] probs[5] = 0.10 - extra * (0.10 / poolSum)  // 老猴
+[P90][] probs[6] = 0.15 - extra * (0.15 / poolSum)  // 草木石头
+[P91][] return probs
+[P92][] }
+[P93][Heading 2] 入场时序
+[P94][] 玩家从地图点击花果山入口 → gateway鉴权 → scene-svc检查牢结值 → 创建scene_session → 调用CalcProbs计算概率 → 随机出角色 → 创建WebSocket连接 → 推送角色信息到客户端 → 客户端加载对应场景
+[P95][Heading 2] 缓存策略
+[P96][List Paragraph] 玩家属性、背包：Redis Hash 缓存，TTL 5分钟，写时同步到MySQL
+[P97][List Paragraph] 牢结值：Redis 存当日剩余秒数，定时刷新到MySQL fatigue_log
+[P98][List Paragraph] 战斗实时状态：Redis Hash 存场景会话状态，战斗结束后删除
+[P99][Heading 1] 实时战斗系统
+[P100][Heading 2] 同步架构
+[P101][] 服务端权威，定时境(Tick)推进，客户端只做表现层渲染和输入上报。客户端预测(Prediction)+插值(Interpolation)平滑表现。
+[P103][Heading 2] 帧协议定义
+[P104][Heading 3] 客户端 → 服务端 (InputFrame)
+[P105][] message InputFrame {
+[P106][] uint32 seq        = 1; // 帧序号
+[P107][] uint32 input_mask = 2; // 位控: move_left|move_right|skill1|skill2|...
+[P108][] float  target_x   = 3; // 目标位置X(点击移动)
+[P109][] float  target_y   = 4; // 目标位置Y
+[P110][] uint32 timestamp  = 5; // 客户端时间戳
+[P111][] }
+[P112][Heading 3] 服务端 → 客户端 (SyncFrame)
+[P113][] message SyncFrame {
+[P114][] uint32 seq             = 1;
+[P115][] repeated EntityState entities = 2;
+[P116][] repeated Event events        = 3; // 本幀触发的事件(伤害/死亡/技能释放)
+[P117][] }
+[P118][] message EntityState {
+[P119][] uint32 entity_id  = 1;
+[P120][] float  x          = 2;
+[P121][] float  y          = 3;
+[P122][] int32  hp         = 4;
+[P123][] int32  mp         = 5;
+[P124][] uint32 state      = 6; // idle/run/attack/hit/dead/...
+[P125][] uint32 facing     = 7; // 朝向
+[P126][] }
+[P127][] message Event {
+[P128][] uint32 type       = 1; // DAMAGE/DEATH/SKILL_CAST/...
+[P129][] uint32 source_id  = 2;
+[P130][] uint32 target_id  = 3;
+[P131][] int32  value      = 4; // 伤害值/治疗值
+[P132][] string text       = 5; // 评语/死亡描述等文本
+[P133][] }
+[P134][Heading 2] 大圣战斗逻辑
+[P135][] 玩家操作大圣时，服务端维护大圣实体和魔王实体。玩家手动释放技能上报InputFrame，服务端根据技能参数计算伤害判定。
+[P136][List Paragraph] 大圣属性为全游戏最高档，攻击力/生命值/速度远超魔王
+[P137][List Paragraph] 魔王三阶段AI：阶段1(100%-60%HP)狂撸进攻 / 阶段2(60%-30%HP)召唤手下+范围扫击 / 阶段3(30%-0%) 爆发绝招
+[P138][List Paragraph] 结局判定：魔王HP归零→完胜 / 大圣HP归零→死亡 / 大圣HP<30%→受伤评定
+[P139][Heading 2] AI大圣逻辑（玩家操作其他角色时）
+[P140][] 玩家不是大圣时，大圣由AI控制，5分钟内击杀魔王。
+[P141][List Paragraph] AI大圣行为树：检测魔王位置 → 靠近 → 释放技能连招 → 根据魔王HP切换阶段
+[P142][List Paragraph] 魔王由玩家操作时：AI大圣压制力略降，保证魔王能撞5分钟但最终必死
+[P143][List Paragraph] 魔王非玩家操作时：AI魔王对AI大圣，结果固定为大圣胜，5分钟时长到点杀
+[P144][List Paragraph] 手下/猴子/老猴：处于混乱场景中，被AI大圣和AI魔王的范围技能波及
+[P145][Heading 1] 生存模式与观测模式
+[P146][Heading 2] 生存模式（手下/猴子/老猴）
+[P147][] 复用战斗同步框架，玩家实体为弱小角色，主要操作是躲避和跑路。
+[P148][List Paragraph] 威胁预警：服务端提前1幀推送危险区域提示，客户端显示红色警告圆
+[P149][List Paragraph] 独立HP系统：弱小角色HP很低，一般1-3次被波及即死亡
+[P150][List Paragraph] 死亡时从对应角色的death_descriptions表中随机抽取一条描述
+[P151][List Paragraph] 5分钟后AI大圣击杀魔王，场景结束，存活的玩家获得生存成功奖励
+[P152][Heading 2] 观测模式（草木石头）
+[P153][] 玩家为静态实体，无法移动，通过观测事件累加观测度。
+[P154][List Paragraph] 观测度 = 时间累加(0-60%) + 特定事件加成(0-40%)
+[P155][List Paragraph] 特定事件：大圣释放大招(+10%) / 魔王召唤手下(+5%) / 魔王爆绝招(+10%) / 魔王死亡(+15%)
+[P156][List Paragraph] 被波及死亡时提前结算，按当前观测度发奖
+[P157][List Paragraph] 奖励权重：材料90% / 功法残卷4% / 魔王兵器5% / 悟性+0.1仅为1%（按观测度满100%时触发抽奖）
+[P158][Heading 1] 牢结值系统
+[P159][Heading 2] 数据模型
+[P160][] // Redis Key: fatigue:{player_id}:{date}
+[P161][] // Value: remaining_sec (INT)
+[P162][] // TTL: 次日凌晨3:00过期
+[P164][] // MySQL: fatigue_log 记录每日消耗/恢复
+[P165][] // 每日重置: 凌晨3:00 定时任务将remaining_sec重置为18000
+[P166][Heading 2] 消耗规则
+[P167][Heading 2] 牢结耗尽负状态
+[P168][List Paragraph] 不可进入副本：scene-svc检查牢结值，<=0时拒绝进入请求
+[P169][List Paragraph] 自由探索速度下降：移动速度×0.5
+[P170][List Paragraph] 属性降80%：atk/def/hp_max/spd等全部×0.2
+[P171][Heading 2] 恢复机制
+[P172][] // 打坐恢复伪代码
+[P173][] func Meditate(playerId int64, durationSec int) {
+[P174][] recover := durationSec * 2  // 1h → 2h 恢复
+[P175][] redis.IncrBy(fatigueKey, recover)
+[P176][] // 上限不超过 18000
+[P177][] // 写入 fatigue_log.recover_sec
+[P178][] }
+[P179][Heading 1] 奖励系统
+[P180][Heading 2] 奖励计算流程
+[P181][] 场景结束时，battle-svc将结算结果发送到reward-svc，reward-svc异步计算奖励并入库。
+[P182][] // 消息队列: reward_queue
+[P183][] message RewardRequest {
+[P184][] int64  player_id  = 1;
+[P185][] int32  scene_id   = 2;
+[P186][] int32  role_type  = 3;
+[P187][] int32  outcome    = 4;  // 结局
+[P188][] int32  duration   = 5;  // 存活时长
+[P189][] int32  observe    = 6;  // 观测度(草木石头)
+[P190][] int32  death_id   = 7;  // 死亡方式
+[P191][] }
+[P192][Heading 2] 奖励表配置
+[P193][] 奖励表存储在MySQL，通过Redis缓存。每个角色+结局组合对应一个奖励池，按权重随机抽取。
+[P194][Heading 2] 唯一性奖励处理
+[P195][] 悟性+0.1为唯一性奖励，全服仅一人可获得。使用Redis分布式锁保证原子性。
+[P196][] // Redis: SET unique_reward:comprehension_boost player_id NX
+[P197][] // 返回OK则发放，返回nil则已被其他玩家抢走
+[P198][Heading 1] 客户端架构
+[P199][Heading 2] 场景结构
+[P200][Heading 2] 表现层架构
+[P201][] BattleScene内部按角色类型动态加载不同的UI布局，底层复用同一套战斗同步逻辑。
+[P202][List Paragraph] 共享层：EntityManager / InputManager / NetworkManager / AudioManager
+[P203][List Paragraph] 大圣布局：左上角色面板 + 右下技能栏(6技能) + Boss HP条顶部
+[P204][List Paragraph] 魔王布局：左上角色面板 + 右下防御技能栏 + 大圣HP条顶部(威压感)
+[P205][List Paragraph] 生存布局：左下HP条 + 右下躲避/跑跳按钮 + 顶部5分钟倒计时 + 威胁预警叠加
+[P206][List Paragraph] 观测布局：底部观测度进度条 + 右侧观测笔记列表 + 中央全屏战斗演出
+[P207][Heading 2] 包体策略
+[P208][Heading 2] 输入处理
+[P209][] 微信/抖音小游戏视解窗口有限，需要虚拟按键覆盖。
+[P210][List Paragraph] 技能按键：屏幕右下方技能图标，点击触发，同时监听键盘1-5+J
+[P211][List Paragraph] 移动：左侧虚拟摇杆/点击地面移动
+[P212][List Paragraph] 手势：屏幕左上滑动视角（魔王视角需要看大圣位置）
+[P213][Heading 1] 跨平台数据互通
+[P214][Heading 2] 账号体系
+[P215][] 微信/抖音/App 使用同一套玩家数据，通过平台授权绑定。
+[P216][] // 绑定流程
+[P217][] // 1. 微信登录 → 获彖 code → 换 openid
+[P218][] // 2. 检查 player 表 是否已绑定 openid
+[P219][] // 3. 未绑定 → 创建 player 记录
+[P220][] // 4. 已绑定 → 返回玩家数据
+[P221][] // 5. App端可选择微信/抖音授权登录，实现跨平台共享
+[P222][Heading 2] 数据同步策略
+[P223][List Paragraph] 核心数据全部服务端存储，客户端不存任何独立数据
+[P224][List Paragraph] 微信/抖音小游戏存档：调用平台云存档API，存储平台授权凭证
+[P225][List Paragraph] 原生App：独立登录体系，可绑定微信/抖音账号
+[P226][Heading 2] 小游戏适配
+[P227][Heading 1] 部署方案
+[P228][Heading 2] 环境划分
+[P229][Heading 2] 生产环境配置
+[P230][List Paragraph] 计算：阿里云ACK (K8s) 管理微服务Pod，HPA自动伸缩
+[P231][List Paragraph] 数据库：阿里云RDS MySQL 8.0 高可用版（主备同城）
+[P232][List Paragraph] 缓存：阿里云Tair(兼容Redis)，主备版
+[P233][List Paragraph] 对象存储：阿里云OSS + CDN加速
+[P234][List Paragraph] 监控：Prometheus采集 + Grafana看板 + 针信告警
+[P235][List Paragraph] 日志：阿里云SLS日志服务
+[P236][Heading 2] 扩容预期
+[P237][List Paragraph] 初期（DAU < 1万）：2台ECS(4C8G) + RDS基础版 + Tair基础版
+[P238][List Paragraph] 成长期（DAU 1-10万）：K8s集群 + RDS高可用版 + Tair集群版
+[P239][List Paragraph] 爆发期（DAU > 10万）：多可用区多活 + 读写分离 + 战斗服务独立集群
+[P240][Heading 1] 性能指标
+[P241][Heading 1] 安全与反作弊
+[P242][Heading 2] 服务端权威
+[P243][List Paragraph] 所有战斗逻辑服务端计算，客户端只做表现
+[P244][List Paragraph] 伤害判定、概率计算、奖励发放全部服务端完成
+[P245][List Paragraph] 客户端只上报输入意图，不上报结果
+[P246][Heading 2] 输入校验
+[P247][List Paragraph] 帧序号连续性检查，防重放/跳帧
+[P248][List Paragraph] 技能CD服务端维护，客户端无CD可调用但服务端不执行
+[P249][List Paragraph] 移动速度上限检查，超出阈值的位置更新被拒绝
+[P250][List Paragraph] 异常输入频率检测，每秒>30帧输入触发告警
+[P251][Heading 2] 奖励发放安全
+[P252][List Paragraph] 奖励计算异步处理，通过消息队列解耦
+[P253][List Paragraph] 唯一性奖励Redis分布式锁保证原子性
+[P254][List Paragraph] 奖励发放记录全量入库，可审计追踪
+
+----- 表格0 行数=10 -----
+  R0: | 层级 | 技术 | 理由 |
+  R1: | 客户端 | Cocos Creator 3.8 | 微信/抖音小游戏主流引擎，跨平台编译，支持WebGL+WebSocket |
+  R2: | 后端语言 | Go 1.22 | 高并发、低延迟，微服务生态成熟 |
+  R3: | 微服务框架 | Kratos / Gin | Kratos内置渠道/注册中心/限流，Gin用于HTTP网关 |
+  R4: | 数据库 | MySQL 8.0 (阿里云RDS) | 关系型数据存储，RDS高可用架构 |
+  R5: | 缓存 | Redis 7 (阿里云Tair) | 场景会话/战斗状态/排行榜/限流计数 |
+  R6: | 消息队列 | NSQ / Kafka | 奖励发放/日志异步处理，副本事件触发 |
+  R7: | 实时通信 | WebSocket + Protobuf | 战斗状态同步，二进制压缩省带宽 |
+  R8: | 对象存储 | 阿里云OSS | 奖励道具图标/角色贴图等静态资源 |
+  R9: | 监控 | Prometheus + Grafana | 服务指标/业务埋点/告警 |
+
+----- 表格1 行数=9 -----
+  R0: | 服务名 | 职责 | 主要接口 |
+  R1: | gateway | HTTP网关，鉴权/限流/路由 | REST API |
+  R2: | auth-svc | 登录/注册/令牌管理 | login, refresh, verify |
+  R3: | player-svc | 玩家属性/背包/装备 | getProfile, updateAttr, getInventory |
+  R4: | scene-svc | 场景管理/进出/身份投入 | enterScene, rollIdentity, exitScene |
+  R5: | battle-svc | 实时战斗/AI大圣/生存模式 | WebSocket 帧同步 |
+  R6: | fatigue-svc | 牢结值/打坐恢复 | getFatigue, meditate, recover |
+  R7: | reward-svc | 奖励计算/发放/背包入库 | calcReward, grantItems |
+  R8: | ranking-svc | 排行榜/成就 | getRank, reportScore |
+
+----- 表格2 行数=4 -----
+  R0: | 库 | 存储内容 | 策略 |
+  R1: | 主库 | 玩家/属性/背包/会话/日志 | 阿里云RDS高可用版 |
+  R2: | 战斗库 | 实时战斗状态(临时) | 独立MySQL实例，战斗结束后清理 |
+  R3: | 日志库 | operation_log/event_log | 定期归档到OSS |
+
+----- 表格3 行数=6 -----
+  R0: | 参数 | 值 | 说明 |
+  R1: | Tick率 | 20Hz (50ms) | 服务端每50ms推进一幀逻辑 |
+  R2: | 帧压缩 | Protobuf | 二进制序列化，单帧<200B |
+  R3: | 超时重连 | 5秒 | 超过5秒无心跳则断线重连 |
+  R4: | 最大延迟 | 100ms | 超过则触发拉鼠回退 |
+  R5: | 客户端缓冲 | 3幀 | 客户端保留3幀状态用于插值 |
+
+----- 表格4 行数=4 -----
+  R0: | 行为 | 消耗 | 说明 |
+  R1: | 在线计时 | 1:1 | 在线每1秒消耗1秒牢结值 |
+  R2: | 副本内战斗 | 实时扣除 | 进入副本后按实际时长扣除 |
+  R3: | 自由探索 | 实时扣除 | 同上 |
+
+----- 表格5 行数=3 -----
+  R0: | 方式 | 恢复量 | 说明 |
+  R1: | 打坐 | 1小时恢复2小时 | 玩家主动打坐，每秒恢复牢结值/3600*2秒 |
+  R2: | 恢复道具 | 固定值 | 商城购买/活动获取，使用后立即恢复指定时长 |
+
+----- 表格6 行数=9 -----
+  R0: | 角色 | 结局 | 奖励池 |
+  R1: | 大圣 | 完胜 | 功法残卷×5 / 稀有材料×3 / 普通材料×5 |
+  R2: | 大圣 | 受伤 | 功法残卷×2 / 普通材料×3 |
+  R3: | 大圣 | 死亡 | 普通材料×1 |
+  R4: | 魔王 | 剩9分钟以上 | 兵器残块 / 铠甲残块（撞5分钟越久越多） |
+  R5: | 手下/猴子 | 生存成功 | 材料×3-5（存活越久越多） |
+  R6: | 手下/猴子 | 死亡 | 材料×1-2 |
+  R7: | 老猴 | 生存/死亡 | 材料+稀有材料概率提升+功法残卷概率提升 |
+  R8: | 草木石头 | 按观测度 | 材料90% / 功法4% / 兵器5% / 悟性+0.1仅1% |
+
+----- 表格7 行数=5 -----
+  R0: | 场景 | 职责 | 加载方式 |
+  R1: | LoginScene | 登录/授权 | 启动即加载 |
+  R2: | WorldMapScene | 世界地图/自由探索 | 登录后加载 |
+  R3: | DungeonEntryNode | 副本入口节点 | WorldMapScene子节点 |
+  R4: | BattleScene | 副本战斗场景 | 动态加载，根据roles_type切换表现层 |
+
+----- 表格8 行数=5 -----
+  R0: | 包体 | 内容 | 大小限制 |
+  R1: | 主包 | 场景/角色/特效 | 4MB (微信小游戏主包上限) |
+  R2: | 副包1 | 花果山场景资源 | 10MB |
+  R3: | 副包2 | 其他场景资源 | 10MB |
+  R4: | 资源服务器 | 道具图标/贴图 | OSS CDN 分发 |
+
+----- 表格9 行数=4 -----
+  R0: | 平台 | 引擎 | 注意事项 |
+  R1: | 微信小游戏 | Cocos Creator 导出微信小游戏包 | 主包不超4MB / 内存不超128MB / WebGL2.0 |
+  R2: | 抖音小游戏 | Cocos Creator 导出抖音小游戏包 | 同上，需适配抖音登录SDK |
+  R3: | 原生App | Cocos Creator 导出Android/iOS包 | 无包体限制 / 可用更高画质 / 添加推送 |
+
+----- 表格10 行数=4 -----
+  R0: | 环境 | 用途 | 资源配置 |
+  R1: | dev | 开发调试 | 1台ECS + 单机MySQL + 单机Redis |
+  R2: | staging | 测试验收 | 2台ECS + RDS高可用 + Tair |
+  R3: | prod | 线上生产 | K8s集群 + RDS主备 + Tair集群 |
+
+----- 表格11 行数=8 -----
+  R0: | 指标 | 目标 | 监控方式 |
+  R1: | API响应时间 | P99 < 200ms | Prometheus histogram |
+  R2: | WebSocket延迟 | P99 < 100ms | 帧时间戳对比 |
+  R3: | 战斗Tick稳定性 | 抖动 < 20ms | 服务端内部监控 |
+  R4: | 单场战斗内存 | < 50MB | 客户端profiler |
+  R5: | 并发战斗 | 单服1000场 | 压测 |
+  R6: | 数据库QPS | < 5000 | RDS监控 |
+  R7: | Redis QPS | < 20000 | Tair监控 |
+

@@ -118,3 +118,47 @@ func (c *Client) Incr(key string) (int64, error) {
 func (c *Client) Expire(key string, expiration time.Duration) error {
 	return c.rdb.Expire(c.ctx, key, expiration).Err()
 }
+
+// SetNX 仅当键不存在时才写入（SET if Not eXists），原子操作。
+// 常用于分布式锁：多个服务实例同时尝试获取同一资源，只有一个能成功。
+//
+// 参数:
+//   - key: 键名
+//   - value: 值
+//   - expiration: 过期时间（防止死锁），设为0表示不过期
+//
+// 返回值:
+//   - bool: true=获取到锁（键之前不存在，本次写入成功），false=键已存在（获取锁失败）
+//   - error: Redis 操作错误
+//
+// 使用场景：花果山副本唯一性奖励（悟性+0.1）全服限量领取。
+func (c *Client) SetNX(key string, value interface{}, expiration time.Duration) (bool, error) {
+	return c.rdb.SetNX(c.ctx, key, value, expiration).Result()
+}
+
+// IncrBy 将指定键的值原子性地加上指定增量，并返回新值。
+//
+// 参数:
+//   - key: 键名
+//   - delta: 增量（可以为正/负）
+//
+// 返回值:
+//   - int64: 累加后的新值
+//   - error: 键值不是整型时返回错误
+//
+// 使用场景：牢结值消耗/恢复，观测度累加等。
+func (c *Client) IncrBy(key string, delta int64) (int64, error) {
+	return c.rdb.IncrBy(c.ctx, key, delta).Result()
+}
+
+// DecrBy 将指定键的值原子性地减去指定增量，并返回新值。
+// 语义化包装，等价于 IncrBy(key, -delta)。
+func (c *Client) DecrBy(key string, delta int64) (int64, error) {
+	return c.rdb.DecrBy(c.ctx, key, delta).Result()
+}
+
+// TTL 查询键的剩余过期时间（秒）。
+// 返回 -1 表示无过期时间；-2 表示键不存在。
+func (c *Client) TTL(key string) (time.Duration, error) {
+	return c.rdb.TTL(c.ctx, key).Result()
+}

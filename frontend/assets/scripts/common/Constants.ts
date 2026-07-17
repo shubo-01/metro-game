@@ -12,6 +12,8 @@ export const ServerConfig = {
     CHARACTER_BASE_URL: 'https://api.xunxian.game',
     /** 死亡服务地址（生产环境通过网关路由，此处备用） */
     DEATH_BASE_URL: 'https://api.xunxian.game',
+    /** 副本服务地址（生产环境通过网关路由，此处备用） */
+    DUNGEON_BASE_URL: 'https://api.xunxian.game',
     /** WebSocket 地址 */
     WS_URL: 'wss://ws.xunxian.game',
 
@@ -22,6 +24,8 @@ export const ServerConfig = {
     DEV_CHARACTER_URL: 'http://127.0.0.1:8005',
     /** 死亡服务（death-service）端口 8006 */
     DEV_DEATH_URL: 'http://127.0.0.1:8006',
+    /** 副本服务（dungeon-service）端口 8007 —— 花果山副本 + 牢结值系统 */
+    DEV_DUNGEON_URL: 'http://127.0.0.1:8007',
     /** 开发环境 WebSocket 地址 */
     DEV_WS_URL: 'ws://127.0.0.1:8004/ws',
 };

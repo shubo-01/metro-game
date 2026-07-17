@@ -28,9 +28,11 @@ export class HttpClient {
 
     /**
      * 根据请求路径前缀自动选择对应微服务地址
-     * - /character/* → 角色服务（端口 8005）
-     * - /death/*     → 死亡服务（端口 8006）
-     * - 其他          → 默认认证服务（端口 8001）
+     * - /character/*     → 角色服务（端口 8005）
+     * - /death/*         → 死亡服务（端口 8006）
+     * - /dungeon/*       → 副本服务（端口 8007）花果山副本
+     * - /fatigue/*       → 副本服务（端口 8007）牢结值系统
+     * - 其他              → 默认认证服务（端口 8001）
      */
     private static _getServiceBaseUrl(path: string): string {
         if (path.startsWith('/character/')) {
@@ -38,6 +40,9 @@ export class HttpClient {
         }
         if (path.startsWith('/death/')) {
             return ServerConfig.DEV_DEATH_URL;
+        }
+        if (path.startsWith('/dungeon/') || path.startsWith('/fatigue/')) {
+            return ServerConfig.DEV_DUNGEON_URL;
         }
         return HttpClient._baseUrl;
     }

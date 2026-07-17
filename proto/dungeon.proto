@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package xunxian.dungeon;
+
+option go_package = "xunxian/proto/dungeon";
+
+// ═══════════════════════════════════════════
+//  Dungeon Service - 花果山副本 & 牢结值系统消息定义
+//  严格按照《寻仙-花果山副本设计文档 V3》和《花果山副本技术方案》实现
+// ═══════════════════════════════════════════
+
+// ────────────────────────────────────────
+// 【1】进入副本 POST /dungeon/huaguoshan/enter
+// ────────────────────────────────────────
+message EnterDungeonRequest {
+  int64  player_id = 1;    // 玩家ID（同 character_id）
+  double enter_x   = 2;    // 世界地图进入点X（用于结算后返回原位）
+  double enter_y   = 3;    // 世界地图进入点Y
+}
+
+message EnterDungeonResponse {
+  int32  code           = 1;
+  string msg            = 2;
+  int64  session_id     = 3;    // 副本会话ID
+  int32  role_type      = 4;    // 抽取到的身份 1=大圣 2=魔王 3=手下 4=普通猴 5=老猴 6=草木石头
+  string role_name      = 5;    // 中文身份名
+  double luck           = 6;    // 本次运气快照
+  int32  scene_id       = 7;    // 场景ID（花果山=1）
+  int32  max_duration   = 8;    // 副本时长上限（秒，固定300）
+  int32  remaining_sec  = 9;    // 当前剩余牢结值
+  repeated RoleProbEntry probs = 10; // 六种身份的最终概率快照
+}
+
+// 单个身份的概率条目
+message RoleProbEntry {
+  int32  role_type  = 1;
+  string role_name  = 2;
+  double base_prob  = 3;    // 基础概率
+  double final_prob = 4;    // 运气加权后的最终概率
+}
+
+// ────────────────────────────────────────
+// 【2】上报观测事件 POST /dungeon/huaguoshan/observe
+//     仅草木石头身份有效
+// ────────────────────────────────────────
+message ObserveEventRequest {
+  int64  session_id = 1;
+  int64  player_id  = 2;
+  // 事件代号:
+  //   wukong_ultimate = 大圣释放大招（+10%）
+  //   mowang_summon   = 魔王召唤手下（+5%）
+  //   mowang_burst    = 魔王爆绝招   （+10%）
+  //   mowang_death    = 魔王死亡     （+15%）
+  string event_code = 3;
+}
+
+message ObserveEventResponse {
+  int32  code          = 1;
+  string msg           = 2;
+  int32  observe_score = 3;   // 更新后的累计观测度 0-100
+  string event_code    = 4;
+  int32  bonus         = 5;   // 本次事件加成
+}
+
+// ────────────────────────────────────────
+// 【3】结算副本 POST /dungeon/huaguoshan/settle
+// ────────────────────────────────────────
+message SettleDungeonRequest {
+  int64 session_id     = 1;
+  int64 player_id      = 2;
+  int32 self_hp_left   = 3;   // 自身剩余HP百分比 0-100
+  int32 boss_hp_left   = 4;   // Boss剩余HP百分比（大圣战填写）
+  bool  killed_by_boss = 5;   // 是否被Boss打死
+  bool  story_death    = 6;   // 是否触发剧情死亡（魔王撑满时上报）
+}
+
+message SettleDungeonResponse {
+  int32  code          = 1;
+  string msg           = 2;
+  int64  session_id    = 3;
+  int32  role_type     = 4;
+  string role_name     = 5;
+  int32  outcome       = 6;    // 结局 1完胜 2受伤 3死亡 4生存 5观测 6剧情死亡
+  string grade         = 7;    // 评级 S/A/B/C/D
+  int32  duration_sec  = 8;    // 存活/坚持时长
+  int32  observe_score = 9;    // 最终观测度（草木石头）
+  string death_text    = 10;   // 死亡描述（若适用）
+  string comment_text  = 11;   // 结局评语（大圣战适用）
+  repeated RewardEntry rewards = 12; // 发放的奖励
+}
+
+// 奖励条目（结算响应/查询回放共用）
+message RewardEntry {
+  int32 item_id   = 1;
+  int32 item_type = 2;   // 1材料 2功法 3装备 4特殊
+  int32 quantity  = 3;
+  int32 is_unique = 4;   // 0普通 1唯一性（悟性+0.1等）
+}
+
+// ────────────────────────────────────────
+// 【4】查询会话状态 GET /dungeon/huaguoshan/session
+//     用于断线重连
+// ────────────────────────────────────────
+message GetSessionRequest {
+  int64 session_id = 1;
+  int64 player_id  = 2;
+}
+
+message GetSessionResponse {
+  int32  code           = 1;
+  string msg            = 2;
+  int64  session_id     = 3;
+  int32  role_type      = 4;
+  string role_name      = 5;
+  int32  outcome        = 6;
+  string grade          = 7;
+  int32  elapsed_sec    = 8;    // 已进行时长
+  int32  remaining_sec  = 9;    // 剩余时长
+  int32  observe_score  = 10;   // 当前观测度（草木石头）
+  bool   is_in_progress = 11;
+}
+
+// ────────────────────────────────────────
+// 【5】概率预览 GET /dungeon/huaguoshan/probs
+//     副本入口界面展示当前概率（不消耗牢结值）
+// ────────────────────────────────────────
+message ProbsPreviewRequest {
+  int64 player_id = 1;
+}
+
+message ProbsPreviewResponse {
+  int32  code = 1;
+  string msg  = 2;
+  double luck = 3;
+  repeated RoleProbEntry probs = 4;
+}
+
+// ═══════════════════════════════════════════
+//  牢结值系统（技术方案第5章）
+// ═══════════════════════════════════════════
+
+// ────────────────────────────────────────
+// 【6】查询牢结值 GET /fatigue/state
+// ────────────────────────────────────────
+message FatigueStateRequest {
+  int64 player_id = 1;
+}
+
+message FatigueStateResponse {
+  int32  code            = 1;
+  string msg             = 2;
+  int64  player_id       = 3;
+  int32  remaining_sec   = 4;   // 剩余秒数
+  int32  daily_max_sec   = 5;   // 每日上限（18000=5小时）
+  bool   is_penalty      = 6;   // 是否处于负状态
+  bool   is_meditating   = 7;   // 是否正在打坐
+  string next_reset_time = 8;   // 下次重置时间（RFC3339）
+}
+
+// ────────────────────────────────────────
+// 【7】消耗牢结值 POST /fatigue/consume
+//     由客户端心跳周期性上报
+// ────────────────────────────────────────
+message FatigueConsumeRequest {
+  int64 player_id   = 1;
+  int32 consume_sec = 2;  // 本次要扣减的秒数（服务端上限保护 ≤300）
+}
+
+message FatigueConsumeResponse {
+  int32  code          = 1;
+  string msg           = 2;
+  int32  remaining_sec = 3;
+  bool   is_penalty    = 4;
+}
+
+// ────────────────────────────────────────
+// 【8】开始打坐 POST /fatigue/meditate/start
+// ────────────────────────────────────────
+message MeditateStartRequest {
+  int64 player_id = 1;
+}
+
+message MeditateStartResponse {
+  int32  code           = 1;
+  string msg            = 2;
+  string meditate_start = 3;   // 打坐开始时间（RFC3339）
+}
+
+// ────────────────────────────────────────
+// 【9】结束打坐 POST /fatigue/meditate/end
+// ────────────────────────────────────────
+message MeditateEndRequest {
+  int64 player_id = 1;
+}
+
+message MeditateEndResponse {
+  int32  code          = 1;
+  string msg           = 2;
+  int32  meditate_sec  = 3;   // 打坐时长
+  int32  recover_sec   = 4;   // 恢复量（=打坐时长×2）
+  int32  remaining_sec = 5;   // 恢复后总剩余
+  bool   is_penalty    = 6;
+}
+
+// ────────────────────────────────────────
+// 【10】使用恢复道具 POST /fatigue/item/use
+// ────────────────────────────────────────
+message FatigueItemUseRequest {
+  int64 player_id  = 1;
+  int32 item_id    = 2;
+  int32 recover_sec = 3;  // 道具固定恢复量
+}
+
+message FatigueItemUseResponse {
+  int32  code          = 1;
+  string msg           = 2;
+  int32  remaining_sec = 3;
+  int32  recover_sec   = 4;
+}
