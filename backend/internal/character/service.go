@@ -107,32 +107,49 @@ func CalcElementCounter(attackerElement, defenderElement int, attackerPower, def
 	return baseMultiplier
 }
 
-// CalcDerivedAttrs 属性衍生计算引擎
-// 精->气血/体魄/身法/根骨, 气->灵力/功法威力, 神->神识/精神壁垒
-type DerivedAttrs struct {
-	HPMax      int `json:"hp_max"`      // 气血上限 = 精 × 100
-	MpMax      int `json:"mp_max"`      // 灵力上限 = 气 × 50
-	SoulMax    int `json:"soul_max"`    // 魂力上限 = 神 × 30
-	Physique   int `json:"physique"`    // 体魄 = 精 × 10（物理防御+近战力量）
-	Agility    int `json:"agility"`     // 身法 = 精 × 5（闪避+移动速度）
-	BoneBase   int `json:"bone_base"`   // 根骨 = 精 × 8（肉身承载力）
-	SkillPower int `json:"skill_power"` // 功法威力 = 气 × 12
-	SenseRange int `json:"sense_range"` // 神识范围 = 神 × 15
-	MentalWall int `json:"mental_wall"` // 精神壁垒 = 神 × 8（异常抵抗）
+// 属性衍生计算已升级为 V2 版本，全部实现在 calc.go 中：
+// CalcDerivedAttrs / CalcShieldCapacity / CalcEquilibrium / CalcDamage / ApplyDamage 等。
+// V1 旧系数（气血=精×100 等）已废弃，请勿再使用。
+
+// recalcAndSaveDerived 按 V2 公式重算指定角色的衍生属性并落库。
+// 任何改变精/气/神的操作（加点/洗点/突破/心魔劫惩罚）之后都必须调用本函数，
+// 否则数据库里的 hp_max/shield_max 等会和根属性对不上。
+// Execer 兼容 *sql.DB 和 *sql.Tx，事务内外都能用。
+// 注意：接口本身导出（供 death 等其他包传参），实现仍是标准库类型，无需额外适配。
+type Execer interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-func CalcDerivedAttrs(jing, qi, shen int) DerivedAttrs {
-	return DerivedAttrs{
-		HPMax:      jing * 100,
-		MpMax:      qi * 50,
-		SoulMax:    shen * 30,
-		Physique:   jing * 10,
-		Agility:    jing * 5,
-		BoneBase:   jing * 8,
-		SkillPower: qi * 12,
-		SenseRange: shen * 15,
-		MentalWall: shen * 8,
+func recalcAndSaveDerived(e Execer, characterID int64) (DerivedAttrs, error) {
+	// 1. 读出当前精气神
+	var jing, qi, shen int
+	if err := e.QueryRow("SELECT jing, qi, shen FROM character_attributes WHERE character_id=?", characterID).
+		Scan(&jing, &qi, &shen); err != nil {
+		return DerivedAttrs{}, err
 	}
+	// 2. 按 V2 公式计算全部衍生值
+	d := CalcDerivedAttrs(jing, qi, shen)
+	// 3. 写回数据库：上限直接覆盖；当前值超过新上限时压到上限（LEAST），避免"血比血条还多"
+	_, err := e.Exec(`UPDATE character_attributes SET
+		hp_max=?, hp_current=LEAST(hp_current, ?),
+		mp_max=?, mp_current=LEAST(mp_current, ?),
+		soul_max=?, soul_current=LEAST(soul_current, ?),
+		shield_max=?, shield_current=LEAST(shield_current, ?),
+		affinity=?, reaction=?, abnormal_resist=?
+		WHERE character_id=?`,
+		d.HPMax, d.HPMax, d.MpMax, d.MpMax, d.SoulMax, d.SoulMax,
+		d.ShieldMax, d.ShieldMax, d.Affinity, d.Reaction, d.AbnormalResist,
+		characterID)
+	return d, err
+}
+
+// RecalcAndSaveDerived 导出版的衍生属性重算函数，供其他服务包（如 death 死亡服务）复用。
+// 背景：death 包在"六道轮回/重聚肉身"时会重置精气神，重置后必须按同一套 V2 公式重算衍生值，
+// 否则会出现跨服务口径不一致（death 用 V1 旧公式、character 用 V2 新公式）的严重问题。
+// 用法：传入 *sql.DB（自动提交）或 *sql.Tx（事务内），效果与包内 recalcAndSaveDerived 完全一致。
+func RecalcAndSaveDerived(e Execer, characterID int64) (DerivedAttrs, error) {
+	return recalcAndSaveDerived(e, characterID)
 }
 
 // ═══════════════════════════════════════════
@@ -200,10 +217,20 @@ func (s *Service) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	charID, _ := result.LastInsertId()
 
 	// 2. 插入 character_attributes（初始值：精1 气1 神1 气运0 悟性0）
+	// 衍生值按 V2 公式初始化：气血=1×50=50、灵力=1×20=20、魂力=1×50=50、
+	// 护盾=(1+1+1)×200=600、亲和=1×0.5=0.5、反应=1、异常抵抗=1×0.5=0.5
+	initDerived := CalcDerivedAttrs(1, 1, 1)
 	_, err = tx.Exec(
-		`INSERT INTO character_attributes (character_id, jing, qi, shen, qi_yun, wu_xing, hp_max, hp_current, mp_max, mp_current, soul_max, soul_current)
-		 VALUES (?, 1, 1, 1, 0, 0, 100, 100, 50, 50, 0, 0)`,
+		`INSERT INTO character_attributes (character_id, jing, qi, shen, qi_yun, wu_xing,
+		 hp_max, hp_current, mp_max, mp_current, soul_max, soul_current,
+		 free_jing, free_qi, free_shen, shield_max, shield_current, affinity, reaction, abnormal_resist)
+		 VALUES (?, 1, 1, 1, 0, 0, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)`,
 		charID,
+		initDerived.HPMax, initDerived.HPMax,
+		initDerived.MpMax, initDerived.MpMax,
+		initDerived.SoulMax, initDerived.SoulMax,
+		initDerived.ShieldMax, initDerived.ShieldMax,
+		initDerived.Affinity, initDerived.Reaction, initDerived.AbnormalResist,
 	)
 	if err != nil {
 		writeJSON(w, 500, APIResponse{Code: 500, Msg: "创建属性失败"})
@@ -512,15 +539,26 @@ func (s *Service) HandleRealmUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 升阶：小阶+1，经验清零
-	s.db.Exec("UPDATE character_realm SET minor_stage=minor_stage+1, exp_jing=0, exp_qi=0, exp_shen=0, stage_segment=0 WHERE character_id=?", req.CharacterID)
+	// 升阶：小阶+1，经验清零，同时发放自由属性点（写入 unassigned_points 待玩家分配）。
+	// V2 规则：每升1级发放自由点，数量随境界递增（人+2/级、真人+3/级、地仙+5/级...）。
+	var subRealm int
+	s.db.QueryRow("SELECT sub_realm FROM character_realm WHERE character_id=?", req.CharacterID).Scan(&subRealm)
+	freePoints := GetFreePointsPerLevel(RealmIndex(majorStage, subRealm))
+	s.db.Exec("UPDATE character_realm SET minor_stage=minor_stage+1, exp_jing=0, exp_qi=0, exp_shen=0, stage_segment=0, unassigned_points=unassigned_points+? WHERE character_id=?",
+		freePoints, req.CharacterID)
+
+	// 查询发放后的待分配点数余额，一并返回给前端展示
+	var unassigned int
+	s.db.QueryRow("SELECT unassigned_points FROM character_realm WHERE character_id=?", req.CharacterID).Scan(&unassigned)
 
 	writeJSON(w, 200, APIResponse{
 		Code: 0,
 		Msg:  "升阶成功",
 		Data: map[string]interface{}{
-			"major_stage": majorStage,
-			"minor_stage": minorStage + 1,
+			"major_stage":       majorStage,
+			"minor_stage":       minorStage + 1,
+			"free_points_grant": freePoints, // 本次发放的自由点
+			"unassigned_points": unassigned, // 当前待分配点数总余额
 		},
 	})
 }
@@ -562,26 +600,46 @@ func (s *Service) HandleBreakthrough(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 突破要求检查
+	// 突破要求检查（V2：8大境界，悟性/气运门槛按PRD 2.4 境界突破条件表）
 	nextStage := majorStage + 1
 	switch nextStage {
-	case 2: // 人->真人
+	case 2: // 人→真人
 		if wuXing < 5 || qiYun < 3 {
 			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破真人需要悟性>=5、气运>=3"})
 			return
 		}
-	case 3: // 真人->仙
-		if wuXing < 15 || qiYun < 10 {
-			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破仙需要悟性>=15、气运>=10"})
+	case 3: // 真人→地仙
+		if wuXing < 10 || qiYun < 6 {
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破地仙需要悟性>=10、气运>=6"})
 			return
 		}
-	case 4: // 仙->金仙
+	case 4: // 地仙→天仙
+		if wuXing < 15 || qiYun < 10 {
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破天仙需要悟性>=15、气运>=10"})
+			return
+		}
+	case 5: // 天仙→金仙
+		if wuXing < 20 || qiYun < 15 {
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破金仙需要悟性>=20、气运>=15"})
+			return
+		}
+	case 6: // 金仙→太乙金仙
 		if wuXing < 30 || qiYun < 20 {
-			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破金仙需要悟性>=30、气运>=20"})
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破太乙金仙需要悟性>=30、气运>=20"})
+			return
+		}
+	case 7: // 太乙金仙→大罗金仙
+		if wuXing < 50 || qiYun < 30 {
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破大罗金仙需要悟性>=50、气运>=30"})
+			return
+		}
+	case 8: // 大罗金仙→神魔·太极
+		if wuXing < 80 || qiYun < 50 {
+			writeJSON(w, 400, APIResponse{Code: 400, Msg: "突破神魔需要悟性>=80、气运>=50"})
 			return
 		}
 	default:
-		writeJSON(w, 400, APIResponse{Code: 400, Msg: "已达最高境界"})
+		writeJSON(w, 400, APIResponse{Code: 400, Msg: "已达最高境界（神魔内部子阶突破请走 /character/dao/breakthrough）"})
 		return
 	}
 
@@ -602,11 +660,8 @@ func (s *Service) HandleBreakthrough(w http.ResponseWriter, r *http.Request) {
 		// 心魔劫失败：属性暴降（精/气/神各降30%），心魔值翻倍，但不降阶
 		s.db.Exec("UPDATE character_attributes SET jing=GREATEST(1, FLOOR(jing*0.7)), qi=GREATEST(1, FLOOR(qi*0.7)), shen=GREATEST(1, FLOOR(shen*0.7)) WHERE character_id=?", req.CharacterID)
 		s.db.Exec("UPDATE character_realm SET xinmo_value=xinmo_value*2 WHERE character_id=?", req.CharacterID)
-		// 同步更新衍生属性（气血/灵力上限随精/气降低而减少）
-		s.db.Exec(`UPDATE character_attributes a
-			SET a.hp_max=(SELECT jing FROM character_attributes WHERE character_id=a.character_id)*100,
-			    a.mp_max=(SELECT qi FROM character_attributes WHERE character_id=a.character_id)*50
-			WHERE a.character_id=?`, req.CharacterID)
+		// 精气神降了，衍生属性（气血/护盾等）必须按 V2 公式同步重算落库
+		recalcAndSaveDerived(s.db, req.CharacterID)
 		writeJSON(w, 200, APIResponse{
 			Code: 0,
 			Msg:  "心魔劫失败！精/气/神各降30%，心魔值翻倍",
@@ -650,20 +705,37 @@ func (s *Service) HandleBreakthrough(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 突破成功！
-	s.db.Exec("UPDATE character_realm SET major_stage=?, minor_stage=1, stage_segment=0, exp_jing=0, exp_qi=0, exp_shen=0, xinmo_value=xinmo_value+1, tribulation_count=tribulation_count+1, dao_xing=dao_xing+100 WHERE character_id=?",
-		nextStage, req.CharacterID)
+	// 突破成功！境界+1；若突破进入神魔阶段，子阶从太极(1)开始
+	subRealmAfter := 0
+	if nextStage == 8 {
+		subRealmAfter = 1
+	}
+	s.db.Exec("UPDATE character_realm SET major_stage=?, minor_stage=1, stage_segment=0, sub_realm=?, exp_jing=0, exp_qi=0, exp_shen=0, xinmo_value=xinmo_value+1, tribulation_count=tribulation_count+1, dao_xing=dao_xing+100 WHERE character_id=?",
+		nextStage, subRealmAfter, req.CharacterID)
 
-	stageNames := map[int]string{1: "人阶", 2: "真人", 3: "仙", 4: "金仙"}
+	// V2 固定点发放：大境界突破时精气神各自动"加到"新境界固定点（不占自由点）。
+	// 固定点表：人1/真人6/地仙16/天仙31/金仙51/太乙76/大罗106/神魔·太极141...
+	// 实际加的增量 = 新境界固定点 - 旧境界固定点（例：人→真人 加 6-1=5 点/属性）。
+	fixedDelta := GetFixedPoints(RealmIndex(nextStage, subRealmAfter)) - GetFixedPoints(RealmIndex(majorStage, 0))
+	if fixedDelta > 0 {
+		s.db.Exec("UPDATE character_attributes SET jing=jing+?, qi=qi+?, shen=shen+? WHERE character_id=?",
+			fixedDelta, fixedDelta, fixedDelta, req.CharacterID)
+	}
+	// 精气神变了，按 V2 公式重算衍生属性并落库
+	derived, _ := recalcAndSaveDerived(s.db, req.CharacterID)
+
+	stageName := GetRealmName(RealmIndex(nextStage, subRealmAfter))
 
 	writeJSON(w, 200, APIResponse{
 		Code: 0,
-		Msg:  fmt.Sprintf("突破成功！晋升为 %s", stageNames[nextStage]),
+		Msg:  fmt.Sprintf("突破成功！晋升为 %s", stageName),
 		Data: map[string]interface{}{
-			"result":      "success",
-			"major_stage": nextStage,
-			"minor_stage": 1,
-			"stage_name":  stageNames[nextStage],
+			"result":            "success",
+			"major_stage":       nextStage,
+			"minor_stage":       1,
+			"stage_name":        stageName,
+			"fixed_point_bonus": fixedDelta, // 本次突破精气神各获得的固定点
+			"derived":           derived,    // 重算后的最新衍生属性
 		},
 	})
 }

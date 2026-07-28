@@ -175,20 +175,26 @@ message CurrentAttrs {
   int32 soul_current = 6;
 }
 
+// V2 衍生属性（与 backend/internal/character/calc.go 的 DerivedAttrs 结构体一一对应）
 message DerivedAttrs {
-  int32 hp_max = 1;       // 气血上限 = 精×100
-  int32 mp_max = 2;       // 灵力上限 = 气×50
-  int32 soul_max = 3;     // 魂力上限 = 神×30
-  int32 physique = 4;     // 体魄 = 精×10
-  int32 agility = 5;      // 身法 = 精×5
-  int32 bone_base = 6;    // 根骨 = 精×8
-  int32 skill_power = 7;  // 功法威力 = 气×12
-  int32 sense_range = 8;  // 神识范围 = 神×15
-  int32 mental_wall = 9;  // 精神壁垒 = 神×8
+  int32  hp_max = 1;          // 气血上限 = 精×50（本体HP，归零=死亡）
+  int32  mp_max = 2;          // 灵力上限 = 气×20（蓝条）
+  int32  soul_max = 3;        // 魂力上限 = 神×50（鬼修血条）
+  int32  physique = 4;        // 体魄 = 精×5（体修攻击力+物理防御）
+  int32  agility = 5;         // 身法 = 精×1（闪避+移动速度）
+  int32  bone_base = 6;       // 根骨 = 精×3（走火入魔判定）
+  int32  skill_power = 7;     // 功法威力 = 气×2（法修伤害系数）
+  int32  sense_range = 8;     // 神识 = 神×1（感知范围·米）
+  double affinity = 9;        // 五行亲和 = 气×0.5（法修元素加成，K值递减）
+  int32  reaction = 10;       // 反应 = 神×1（打断抗性值）
+  double abnormal_resist = 11; // 异常抵抗值 = 神×0.5
+  int64  shield_max = 12;     // 护盾上限 = (精+气+神)×200
+  int32  shield_regen = 13;   // 护盾恢复速度 = (精+气+神)×2/秒（脱战5秒后）
+  double equilibrium = 14;    // 均衡加成：max/min≤3 → 2.0，否则 1.0
 }
 
 message RealmInfo {
-  int32 major_stage = 1;     // 大境界：1=人阶 2=真人 3=仙 4=金仙
+  int32 major_stage = 1;     // V2 大境界：1人 2真人 3地仙 4天仙 5金仙 6太乙金仙 7大罗金仙 8神魔
   int32 minor_stage = 2;     // 小阶：1-9
   int32 stage_segment = 3;   // 段格：0-9
   int64 exp_jing = 4;
@@ -198,6 +204,8 @@ message RealmInfo {
   int32 dao_xing = 8;        // 道行
   int32 karma_value = 9;     // 因果值
   int32 tribulation_count = 10;
+  int32 unassigned_points = 11; // V2 待分配自由属性点（每升1级发放）
+  int32 sub_realm = 12;         // V2 神魔子阶：0非神魔 1太极 2太素 3太始 4太初 5太易
 }
 
 message QiElement {
@@ -206,4 +214,168 @@ message QiElement {
   int32  proficiency = 3;
   bool   is_cultivating = 4;
   string started_at = 5;
+}
+
+// ═══════════════════════════════════════════
+//  人物系统属性 V2 新增接口消息
+// ═══════════════════════════════════════════
+
+// POST /character/points/allocate 分配自由属性点
+message AllocatePointsRequest {
+  int64 character_id = 1;
+  int32 jing = 2;  // 加到精上的点数（>=0）
+  int32 qi = 3;    // 加到气上的点数（>=0）
+  int32 shen = 4;  // 加到神上的点数（>=0）
+}
+
+message AllocatePointsResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  jing = 3;              // 加点后的精（总值）
+  int32  qi = 4;                // 加点后的气
+  int32  shen = 5;              // 加点后的神
+  int32  free_jing = 6;         // 已分配到精的自由点
+  int32  free_qi = 7;           // 已分配到气的自由点
+  int32  free_shen = 8;         // 已分配到神的自由点
+  int32  unassigned_points = 9; // 剩余待分配点数
+  DerivedAttrs derived = 10;    // 重算后的衍生属性
+}
+
+// POST /character/points/wash 洗点
+message WashPointsRequest {
+  int64 character_id = 1;
+}
+
+message WashPointsResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  returned_jing = 3;      // 从精上退回的自由点
+  int32  returned_qi = 4;        // 从气上退回的自由点
+  int32  returned_shen = 5;      // 从神上退回的自由点
+  int32  total_returned = 6;     // 返还到待分配池的总点数
+  int32  unassigned_points = 7;  // 洗点后的待分配点余额
+  int64  wash_cost = 8;          // 本境界洗点应扣灵石（暂未接经济系统）
+  DerivedAttrs derived = 9;      // 重算后的衍生属性
+}
+
+// POST /character/dao/gain 积攒神魔之道
+message DaoGainRequest {
+  int64 character_id = 1;
+  int32 dao_type = 2;  // 1太极 2太素 3太始 4太初 5太易
+  int32 amount = 3;    // 本次获得的道值（>0）
+}
+
+message DaoGainResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  dao_taiji = 3;          // 最新太极之道
+  int32  dao_taisu = 4;          // 最新太素之道
+  int32  dao_taishi = 5;         // 最新太始之道
+  int32  dao_taichu = 6;         // 最新太初之道
+  int32  dao_taiyi = 7;          // 最新太易之道
+  int32  breakthrough_need = 8;  // 子阶突破所需道值（100）
+}
+
+// POST /character/dao/breakthrough 神魔子阶突破
+message DaoBreakthroughRequest {
+  int64 character_id = 1;
+}
+
+message DaoBreakthroughResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  sub_realm = 3;          // 突破后的子阶
+  string sub_realm_name = 4;     // 子阶中文名（太素/太始/...）
+  int32  dao_consumed = 5;       // 消耗的道值（100）
+  int32  dao_remaining = 6;      // 剩余道值
+  int32  fixed_point_bonus = 7;  // 精气神各获得的固定点增量
+  DerivedAttrs derived = 8;      // 重算后的衍生属性
+}
+
+// GET /character/shield 查询护盾/气血状态
+message GetShieldRequest {
+  int64 character_id = 1;
+}
+
+message GetShieldResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  shield_current = 3;  // 当前护盾
+  int64  shield_max = 4;      // 护盾上限 = (精+气+神)×200
+  int32  hp_current = 5;      // 当前气血
+  int32  hp_max = 6;          // 气血上限
+  int32  shield_regen = 7;    // 每秒恢复量 = (精+气+神)×2
+  int32  recover_delay = 8;   // 脱战后开始恢复的等待秒数（5）
+}
+
+// POST /combat/skill 技能伤害结算
+message CombatSkillRequest {
+  int64 attacker_id = 1;
+  int64 defender_id = 2;
+  int32 skill_type = 3;   // 1武器技(体修) 2五行技(法修) 3神位技(魂修)
+  int32 skill_level = 4;  // 技能等级1-10
+  int32 element_type = 5; // 五行技元素类型1-5（其他技能传0）
+  int32 weapon_base = 6;  // 可选：武器基础伤害（不传默认100）
+}
+
+// 伤害各乘区明细（战斗浮字/数值排查用）
+message DamageDetail {
+  double base_damage = 1;    // 路径基础伤害
+  double skill_mul = 2;      // 技能等级倍率 1.0-1.9
+  double multi_mul = 3;      // 多修倍率（仅法修）
+  double sheng_mul = 4;      // 相生系数（仅法修）
+  double counter_mul = 5;    // 五行克制系数（仅法修）
+  double affinity_bonus = 6; // 亲和加成（仅法修）
+  double crit_mul = 7;       // 暴击倍率 1.0/1.5
+}
+
+message CombatSkillResponse {
+  int32  code = 1;
+  string msg = 2;
+  int64  raw_damage = 3;       // 最终伤害值
+  int64  shield_absorbed = 4;  // 护盾吸收量
+  int64  hp_damage = 5;        // 打到本体的伤害
+  bool   shield_broken = 6;    // 是否破盾
+  bool   is_crit = 7;          // 是否暴击
+  double equilibrium = 8;      // 均衡加成 1.0/2.0
+  int64  defender_shield = 9;  // 防守方剩余护盾
+  int64  defender_hp = 10;     // 防守方剩余HP
+  DamageDetail detail = 11;    // 各乘区明细
+}
+
+// POST /combat/abnormal 异常状态判定与施加
+message CombatAbnormalRequest {
+  int64 attacker_id = 1;
+  int64 defender_id = 2;
+  int32 abnormal_type = 3;  // 1冰冻(30%/2s) 2灼烧(30%/3s) 3眩晕(20%/1.5s)
+}
+
+message CombatAbnormalResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  abnormal_type = 3;
+  string abnormal_name = 4;   // 冰冻/灼烧/眩晕
+  double base_prob = 5;       // 基础触发概率
+  double resist_rate = 6;     // 防守方异常抵抗率 = 抵抗值/(抵抗值+K异常)
+  double trigger_prob = 7;    // 实际触发概率 = 基础概率×(1-抵抗率)
+  bool   triggered = 8;       // 本次是否触发
+  double duration = 9;        // 持续秒数（触发时有效）
+  string redis_key = 10;      // active状态键：abnormal:{char_id}:{type}
+}
+
+// POST /combat/shield/recover 脱战护盾恢复
+message ShieldRecoverRequest {
+  int64 character_id = 1;
+  int32 seconds = 2;  // 本次结算的恢复秒数
+}
+
+message ShieldRecoverResponse {
+  int32  code = 1;
+  string msg = 2;
+  int32  regen_per_sec = 3;   // 每秒恢复量 = (精+气+神)×2
+  int32  seconds = 4;         // 本次结算秒数
+  int64  recovered = 5;       // 实际恢复量（封顶后）
+  int64  shield_current = 6;  // 恢复后的护盾
+  int64  shield_max = 7;      // 护盾上限
+  bool   is_full = 8;         // 是否已回满
 }

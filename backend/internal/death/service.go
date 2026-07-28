@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"xunxian/internal/character"
 	"xunxian/internal/config"
 	"xunxian/internal/redis"
 )
@@ -262,12 +263,26 @@ func (s *Service) HandleReincarnation(w http.ResponseWriter, r *http.Request) {
 		reincDesc = "地狱道轮回：全属性归零，熬过有隐藏天赋"
 	}
 
-	// 重置角色属性
-	tx.Exec("UPDATE character_attributes SET jing=?, qi=?, shen=?, qi_yun=?, wu_xing=?, hp_max=?, hp_current=?, mp_max=?, mp_current=?, soul_max=0, soul_current=0 WHERE character_id=?",
+	// 重置角色属性（V2 改造）：这里只写"根属性"（精/气/神/气运/悟性），
+	// 轮回等于重开一世，之前加的自由点也一并作废，所以 free_* 记账同步清零。
+	// 衍生值（气血/灵力/魂力/护盾等）绝不在这里手写公式（那是 V1 的老毛病，
+	// 会和 character 服务的 V2 公式对不上），统一交给下面的 RecalcAndSaveDerived 重算。
+	tx.Exec("UPDATE character_attributes SET jing=?, qi=?, shen=?, qi_yun=?, wu_xing=?, free_jing=0, free_qi=0, free_shen=0 WHERE character_id=?",
 		newJing, newQi, newShen, newQiYun, newWuXing,
-		newJing*100, newJing*100, newQi*50, newQi*50,
 		req.CharacterID,
 	)
+
+	// 按 V2 公式重算全部衍生值（hp/mp/soul/shield/affinity/reaction/abnormal_resist）并落库。
+	// RecalcAndSaveDerived 是 character 包导出的共用重算函数，传入 tx 保证在同一事务内完成。
+	if _, err := character.RecalcAndSaveDerived(tx, req.CharacterID); err != nil {
+		writeJSON(w, 500, APIResponse{Code: 500, Msg: "轮回后重算衍生属性失败"})
+		return
+	}
+
+	// 轮回转世 = 满状态重生：把当前值补满到新上限
+	// （重算函数只负责"上限"和"封顶当前值"，不负责回填；魂力条是鬼修专用，
+	//   转世后是肉身状态，当前魂力清零即可）
+	tx.Exec("UPDATE character_attributes SET hp_current=hp_max, mp_current=mp_max, shield_current=shield_max, soul_current=0 WHERE character_id=?", req.CharacterID)
 
 	// 重置境界
 	tx.Exec("UPDATE character_realm SET major_stage=1, minor_stage=1, stage_segment=0, exp_jing=0, exp_qi=0, exp_shen=0, xinmo_value=0, breakthrough_status=0 WHERE character_id=?", req.CharacterID)
@@ -328,6 +343,10 @@ func (s *Service) HandleGhostEnter(w http.ResponseWriter, r *http.Request) {
 	var shen int
 	s.db.QueryRow("SELECT shen FROM character_attributes WHERE character_id=?", req.CharacterID).Scan(&shen)
 
+	// 鬼修专用数值：魂力血条上限 = 神×30，写入 character_death_state.soul_hp_max。
+	// 注意：这是鬼修独立体系的数值，与 V2 DerivedAttrs 的魂力上限
+	// （character_attributes.soul_max = 神×50，见 character/calc.go）是两套体系，
+	// 按策划案保留 ×30 不改，请勿"顺手统一"成 V2 系数。
 	soulMax := shen * 30
 	soulCurrent := soulMax
 
@@ -366,10 +385,15 @@ func (s *Service) HandleGhostExit(w http.ResponseWriter, r *http.Request) {
 	s.db.Exec("UPDATE character_death_state SET ghost_mode=0, soul_hp_max=0, soul_hp_current=0 WHERE character_id=?", req.CharacterID)
 	s.db.Exec("UPDATE character_base SET race=1 WHERE character_id=?", req.CharacterID)
 
-	// 恢复气血（精属性决定）
-	var jing int
-	s.db.QueryRow("SELECT jing FROM character_attributes WHERE character_id=?", req.CharacterID).Scan(&jing)
-	s.db.Exec("UPDATE character_attributes SET hp_max=?, hp_current=? WHERE character_id=?", jing*100, jing*100, req.CharacterID)
+	// 恢复气血（V2 改造）：不再手写 V1 公式（hp=精×100），
+	// 改为调用 character 包导出的重算函数，按 V2 公式重算全部衍生值
+	// （hp/mp/soul/shield/affinity/reaction/abnormal_resist），保证跨服务口径一致。
+	if _, err := character.RecalcAndSaveDerived(s.db, req.CharacterID); err != nil {
+		writeJSON(w, 500, APIResponse{Code: 500, Msg: "重聚肉身后重算衍生属性失败"})
+		return
+	}
+	// 重聚肉身 = 肉身满血回归：把当前气血补满到重算后的上限
+	s.db.Exec("UPDATE character_attributes SET hp_current=hp_max WHERE character_id=?", req.CharacterID)
 
 	writeJSON(w, 200, APIResponse{Code: 0, Msg: "重聚肉身成功，恢复为正常修炼状态"})
 }

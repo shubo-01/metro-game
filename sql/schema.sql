@@ -1,6 +1,12 @@
 -- ═══════════════════════════════════════════
 --  寻仙 - 数据库建表脚本（完整版，含全部注释）
 --  MySQL 8.0+ / utf8mb4
+--
+--  【执行顺序说明】
+--  ① 全新环境初始化：只需执行 schema.sql + character_system.sql
+--     （两者的表定义均已是 V2 版本，包含全部 V2 字段/新表，无需再跑迁移脚本）
+--  ② 存量 V1 老库升级：不要重复执行本文件，只需执行一次
+--     sql/migrations/v2_character_attributes.sql（增列+新表+一次性重算）
 -- ═══════════════════════════════════════════
 
 -- ── 创建数据库 ──
@@ -110,20 +116,28 @@ CREATE TABLE IF NOT EXISTS character_base (
 --  character_attributes: 五维属性表（Table 5）
 -- ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS character_attributes (
-  character_id  BIGINT UNSIGNED PRIMARY KEY         COMMENT '角色ID，关联character_base.character_id',
-  jing          INT           DEFAULT 1             COMMENT '精（肉身强度）：影响气血上限/体魄/身法/根骨',
-  qi            INT           DEFAULT 1             COMMENT '气（修炼能量总和）：影响灵力上限/功法威力',
-  shen          INT           DEFAULT 1             COMMENT '神（灵魂之力）：影响魂力上限/神识范围/精神壁垒',
-  qi_yun        INT           DEFAULT 0             COMMENT '气运（命运属性）：影响奇遇/掉落/天劫减免/厄运抵抗',
-  wu_xing       INT           DEFAULT 0             COMMENT '悟性（成长天赋）：影响修炼速度/功法领悟上限/突破成功率',
-  hp_max        INT           DEFAULT 100           COMMENT '气血上限（精衍生）：=精×100，血条总量',
-  hp_current    INT           DEFAULT 100           COMMENT '当前气血：战斗中消耗，自然恢复',
-  mp_max        INT           DEFAULT 50            COMMENT '灵力上限（气衍生）：=气×50，蓝条总量',
-  mp_current    INT           DEFAULT 50            COMMENT '当前灵力：释放技能消耗',
-  soul_max      INT           DEFAULT 0             COMMENT '魂力上限（神衍生）：=神×30，鬼修专用',
-  soul_current  INT           DEFAULT 0             COMMENT '当前魂力：鬼修状态使用',
-  updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '属性最后更新时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色五维属性表：精气神+气运+悟性 + 气血/灵力/魂力衍生值';
+  character_id    BIGINT UNSIGNED PRIMARY KEY         COMMENT '角色ID，关联character_base.character_id',
+  jing            INT           DEFAULT 1             COMMENT '精（肉身强度）：影响气血上限/体魄/身法/根骨',
+  qi              INT           DEFAULT 1             COMMENT '气（修炼能量总和）：影响灵力上限/功法威力/五行亲和',
+  shen            INT           DEFAULT 1             COMMENT '神（灵魂之力）：影响魂力上限/神识范围/反应/异常抵抗',
+  qi_yun          INT           DEFAULT 0             COMMENT '气运（命运属性）：影响奇遇/掉落/天劫减免/厄运抵抗',
+  wu_xing         INT           DEFAULT 0             COMMENT '悟性（成长天赋）：影响修炼速度/暴击率(悟性×0.5%)/突破成功率',
+  free_jing       INT           DEFAULT 0             COMMENT 'V2 已分配到精的自由点数：玩家用待分配点主动加的部分，洗点时只退这部分（固定点不退）',
+  free_qi         INT           DEFAULT 0             COMMENT 'V2 已分配到气的自由点数：同 free_jing，取值>=0',
+  free_shen       INT           DEFAULT 0             COMMENT 'V2 已分配到神的自由点数：同 free_jing，取值>=0',
+  hp_max          INT           DEFAULT 50            COMMENT '气血上限（精衍生）：V2公式=精×50，血条总量，归零=死亡',
+  hp_current      INT           DEFAULT 50            COMMENT '当前气血：战斗中消耗，自然恢复',
+  mp_max          INT           DEFAULT 20            COMMENT '灵力上限（气衍生）：V2公式=气×20，蓝条总量',
+  mp_current      INT           DEFAULT 20            COMMENT '当前灵力：释放技能消耗',
+  soul_max        INT           DEFAULT 50            COMMENT '魂力上限（神衍生）：V2公式=神×50，鬼修专用血条',
+  soul_current    INT           DEFAULT 50            COMMENT '当前魂力：鬼修状态使用',
+  shield_max      BIGINT        DEFAULT 600           COMMENT 'V2 护盾上限=(精+气+神)×200：唯一被动防御层，初始(1+1+1)×200=600',
+  shield_current  BIGINT        DEFAULT 600           COMMENT 'V2 当前护盾值：受击先扣护盾后扣气血，脱战5秒后按(精+气+神)×2/秒恢复',
+  affinity        DECIMAL(10,1) DEFAULT 0.5           COMMENT 'V2 五行亲和=气×0.5：法修元素加成，实际加成=1+亲和/(亲和+K亲和)，K随境界查表（人100级K=67）',
+  reaction        INT           DEFAULT 1             COMMENT 'V2 反应=神×1：打断施法/抗打断的判定值，抗性率=反应/(反应+K反应)，K反应=2×K亲和',
+  abnormal_resist DECIMAL(10,1) DEFAULT 0.5           COMMENT 'V2 异常抵抗值=神×0.5：抵抗率=值/(值+K异常)，实际异常触发概率=基础概率×(1-抵抗率)',
+  updated_at      DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '属性最后更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色五维属性表（V2）：精气神+气运+悟性+自由点记账 + 气血/灵力/魂力/护盾/亲和/反应/异常抵抗衍生值';
 
 -- ─────────────────────────────────────
 --  character_qi_elements: 气的五行多修表（Table 6）
@@ -144,7 +158,7 @@ CREATE TABLE IF NOT EXISTS character_qi_elements (
 -- ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS character_realm (
   character_id        BIGINT UNSIGNED PRIMARY KEY     COMMENT '角色ID',
-  major_stage         TINYINT         DEFAULT 1       COMMENT '大境界：1=人阶 2=真人 3=仙 4=金仙',
+  major_stage         TINYINT         DEFAULT 1       COMMENT 'V2 大境界：1=人 2=真人 3=地仙 4=天仙 5=金仙 6=太乙金仙 7=大罗金仙 8=神魔',
   minor_stage         TINYINT         DEFAULT 1       COMMENT '小阶：1-9阶',
   stage_segment       TINYINT         DEFAULT 0       COMMENT '段格：0-9，可见进度条',
   exp_jing            BIGINT          DEFAULT 0       COMMENT '精属性当前经验值',
@@ -155,8 +169,45 @@ CREATE TABLE IF NOT EXISTS character_realm (
   dao_xing            INT             DEFAULT 0       COMMENT '道行：修行资历积累，影响NPC对话和功法门槛',
   karma_value         INT             DEFAULT 0       COMMENT '因果值：正=善行，负=恶行，影响轮回道分配',
   breakthrough_status TINYINT         DEFAULT 0       COMMENT '突破状态：0=正常 1=突破中 2=心魔劫中 3=天劫中',
+  unassigned_points   INT             DEFAULT 0       COMMENT 'V2 待分配自由属性点：每升1级发放（人+2/真人+3/地仙+5...递增），通过 /character/points/allocate 分配到精气神',
+  sub_realm           TINYINT         DEFAULT 0       COMMENT 'V2 神魔子阶：0=非神魔境界 1=太极 2=太素 3=太始 4=太初 5=太易，仅 major_stage=8 时有效',
   updated_at          DATETIME        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='境界与经验表：大境界/小阶/经验/心魔/因果/道行等成长数据';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='境界与经验表（V2）：大境界/小阶/经验/心魔/因果/道行/待分配点/神魔子阶等成长数据';
+
+-- ─────────────────────────────────────
+--  dao_accumulation: 神魔之道积攒表（V2 新表）
+--  神魔境界内部子阶突破不走天劫，改为"以道证道"：
+--  当前子阶对应道值攒够100 → 消耗100 → 子阶+1
+-- ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS dao_accumulation (
+  character_id      BIGINT UNSIGNED PRIMARY KEY COMMENT '角色ID，关联character_base.character_id，一人一行',
+  dao_taiji         INT     DEFAULT 0           COMMENT '太极之道：太极(子阶1)→太素(子阶2)突破消耗，取值>=0，攒够100可突破',
+  dao_taisu         INT     DEFAULT 0           COMMENT '太素之道：太素(子阶2)→太始(子阶3)突破消耗，取值>=0',
+  dao_taishi        INT     DEFAULT 0           COMMENT '太始之道：太始(子阶3)→太初(子阶4)突破消耗，取值>=0',
+  dao_taichu        INT     DEFAULT 0           COMMENT '太初之道：太初(子阶4)→太易(子阶5)突破消耗，取值>=0',
+  dao_taiyi         INT     DEFAULT 0           COMMENT '太易之道：终局子阶预留（太易已是最高子阶，暂无消耗场景）',
+  current_sub_realm TINYINT DEFAULT 1           COMMENT '当前神魔子阶快照：1太极 2太素 3太始 4太初 5太易（权威数据在character_realm.sub_realm，此处冗余便于查道值时一并读取）',
+  updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='神魔之道积攒表：5种道值，子阶突破消耗100对应道值';
+
+-- ─────────────────────────────────────
+--  wash_log: 洗点流水表（V2 新表）
+--  每次洗点记一行，用于对账/追溯/防刷分析。
+--  注意：项目当前无经济/钱包表，cost_paid 恒为0（实际未扣费），
+--        cost_expected 记录按境界表应扣的灵石数，经济系统上线后接入扣费。
+-- ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS wash_log (
+  id             BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT '流水ID，自增',
+  character_id   BIGINT UNSIGNED NOT NULL COMMENT '角色ID，关联character_base.character_id',
+  jing_returned  INT    DEFAULT 0         COMMENT '本次从精上退回的自由点数（>=0）',
+  qi_returned    INT    DEFAULT 0         COMMENT '本次从气上退回的自由点数（>=0）',
+  shen_returned  INT    DEFAULT 0         COMMENT '本次从神上退回的自由点数（>=0）',
+  total_returned INT    DEFAULT 0         COMMENT '本次返还到unassigned_points的总点数=三项之和',
+  cost_expected  BIGINT DEFAULT 0         COMMENT '应扣灵石（按境界洗点表：人100/真人1000/地仙5000/天仙2万/金仙10万/太乙及以上50万）',
+  cost_paid      BIGINT DEFAULT 0         COMMENT '实际扣除灵石：当前无经济系统恒为0，接入后与cost_expected一致',
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '洗点时间',
+  INDEX idx_character (character_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='洗点流水表：记录每次洗点的返还点数与费用';
 
 -- ─────────────────────────────────────
 --  character_death_state: 死亡与鬼修状态表（Table 8）

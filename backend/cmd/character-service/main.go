@@ -60,6 +60,17 @@ func main() {
 	mux.HandleFunc("/character/qi/cultivate", svc.HandleQiCultivate)
 	mux.HandleFunc("/character/qi/elements", svc.HandleQiElements)
 
+	// ── 人物系统属性 V2 新增路由（实现见 internal/character/handler_v2.go）──
+	mux.HandleFunc("/character/points/allocate", svc.HandleAllocatePoints)  // 分配自由属性点
+	mux.HandleFunc("/character/points/wash", svc.HandleWashPoints)          // 洗点（重置自由点）
+	mux.HandleFunc("/character/dao/gain", svc.HandleDaoGain)                // 积攒神魔之道
+	mux.HandleFunc("/character/dao/breakthrough", svc.HandleDaoBreakthrough) // 神魔子阶突破
+	mux.HandleFunc("/character/shield", svc.HandleShield)                   // 查询护盾/气血状态
+	mux.HandleFunc("/combat/skill", svc.HandleCombatSkill)                  // 技能伤害结算（全链路）
+	mux.HandleFunc("/combat/abnormal", svc.HandleCombatAbnormal)            // 异常状态判定与施加
+	mux.HandleFunc("/combat/shield/recover", svc.HandleShieldRecover)       // 脱战护盾恢复
+	mux.HandleFunc("/combat/burn/tick", svc.HandleBurnTick)                 // 灼烧持续掉血结算（每秒一跳）
+
 	// 启动服务
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
