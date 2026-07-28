@@ -1,4 +1,3 @@
-package main
 // dungeon-service 副本服务入口
 // 负责花果山副本流程（进入/观测/结算/奖励）以及牢结值系统（消耗/打坐/道具）。
 // 严格按照《寻仙-花果山副本设计文档 V3》和《花果山副本技术方案》实现。
@@ -17,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"xunxian/internal/middleware"
 	"xunxian/internal/config"
 	"xunxian/internal/database"
 	"xunxian/internal/dungeon"
@@ -83,7 +83,7 @@ func main() {
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler: middleware.CORS(mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 15 * time.Second, // 结算涉及多次DB写入，读写超时相对宽松
 	}

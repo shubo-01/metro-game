@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"xunxian/internal/middleware"
 	"xunxian/internal/auth"
 	"xunxian/internal/config"
 	"xunxian/internal/database"
@@ -59,7 +60,7 @@ func main() {
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler: middleware.CORS(mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

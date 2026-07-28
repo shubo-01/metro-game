@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"xunxian/internal/middleware"
 	"xunxian/internal/config"
 	"xunxian/internal/database"
 	"xunxian/internal/player"
@@ -49,7 +50,7 @@ func main() {
 	mux.HandleFunc("/player/validate-name", svc.HandleValidateName)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 
 	go func() {
 		log.Printf("[player-service] 启动于 %s", addr)

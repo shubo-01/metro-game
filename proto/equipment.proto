@@ -1,0 +1,298 @@
+syntax = "proto3";
+
+package xunxian.equipment;
+
+option go_package = "xunxian/proto/equipment";
+
+// ═══════════════════════════════════════════
+//  Equipment Service - 装备系统消息定义
+//  严格按照《寻仙·装备系统 PRD+技术方案》实现
+//  端口：8009
+// ═══════════════════════════════════════════
+
+// ────────────────────────────────────────
+// 【0】通用结构
+// ────────────────────────────────────────
+
+// 装备附加属性条目（PRD 第七章，16种属性）
+message ExtraAttr {
+  int32  attr_type     = 1;  // 属性类型：1暴击率 2闪避率 3命中率 4穿透 5吸血 6反伤 7元素抗性 8元素伤害 9冰冻概率 10灼烧概率 11击退 12眩晕 13移速 14攻速 15跳跃 16冷却缩减
+  string attr_name     = 2;  // 属性中文名
+  double attr_value    = 3;  // 当前实际值（1级基准 × 等级系数，服务端计算）
+  int32  attr_category = 4;  // 属性大类：1=百分比类 2=元素类 3=特殊效果类 4=功能类
+}
+
+// 装备实例完整信息
+message EquipmentInfo {
+  int64  equipment_id    = 1;   // 装备实例ID
+  int32  quality         = 2;   // 品质：1凡 2珍 3神话碎片 4灵宝 5仙宝 6神话 7道宝 8先天灵宝 9功德灵宝
+  string quality_name    = 3;   // 品质中文名
+  int32  slot_type       = 4;   // 槽位：1-8甲 11-14首饰 21主武器 22副武器
+  string slot_name       = 5;   // 槽位中文名
+  int32  weapon_type     = 6;   // 武器类型：0非武器 1刀剑 2枪戟 3锤斧 4弓弩 5扇笛 6法杖
+  int32  level           = 7;   // 装备等级 1-10
+  int32  durability      = 8;   // 当前耐久（上限300，<10客户端应警告）
+  int32  base_attr_type  = 9;   // 基础加成属性：1=精 2=神 3=气
+  double base_attr_bonus = 10;  // 基础加成实际值 = 品质倍率 × 基数份额 × 等级系数（服务端权威计算）
+  bool   is_equipped     = 11;  // 是否已穿戴
+  int32  status          = 12;  // 状态：0正常 1已碎裂/粉碎
+  string source          = 13;  // 来源：drop/craft/daobao_combine/shard_combine/trade
+  repeated ExtraAttr extra_attrs = 14;  // 附加属性列表（数量由品质决定）
+}
+
+// ────────────────────────────────────────
+// 【1】装备列表 GET /equipment/list?player_id=
+//      已穿戴列表 GET /equipment/equipped?player_id=
+// ────────────────────────────────────────
+message EquipmentListResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated EquipmentInfo equipments = 3;
+}
+
+// ────────────────────────────────────────
+// 【2】穿戴/卸下 POST /equipment/equip、/equipment/unequip
+//      穿戴时服务端校验境界（PRD 第十七章）：
+//      major_stage 更高可穿任意等级；相等时需 stage_segment ≥ 装备等级
+// ────────────────────────────────────────
+message EquipRequest {
+  int64 player_id    = 1;  // 玩家ID
+  int64 equipment_id = 2;  // 目标装备实例ID
+}
+
+message EquipResponse {
+  int32  code       = 1;
+  string msg        = 2;   // 失败原因：境界不足/装备碎裂/槽位冲突等
+  EquipmentInfo equipment = 3;  // 操作后的装备状态
+  SetBonusInfo  set_bonus = 4;  // 穿戴后套装状态（可能触发激活/解除）
+}
+
+// ────────────────────────────────────────
+// 【3】总加成快照 GET /equipment/bonus?player_id=
+//      服务端汇总全部已穿戴装备的精/神/气加成与附加属性
+// ────────────────────────────────────────
+message EquipBonusResponse {
+  int32  code       = 1;
+  string msg        = 2;
+  double jing_bonus = 3;  // 精 总加成（8甲汇总）
+  double shen_bonus = 4;  // 神 总加成（4首饰汇总）
+  double qi_bonus   = 5;  // 气 总加成（主+副武器汇总，副武器基数按表三插值均分）
+  repeated ExtraAttr extra_attrs = 6;  // 全部附加属性汇总（同类型累加）
+  SetBonusInfo set_bonus = 7;          // 套装加成状态
+}
+
+// 套装效果（PRD 第六章：8甲+4首饰全同品质激活）
+message SetBonusInfo {
+  bool   is_active   = 1;  // 是否激活
+  int32  quality     = 2;  // 套装品质
+  double float_value = 3;  // 锁定的随机浮动加成 0~0.8（穿齐时随机并锁定）
+  int32  float_attr  = 4;  // 浮动加成分配到的属性：1=精 2=神 3=气
+}
+
+// ────────────────────────────────────────
+// 【4】装备升级 POST /equipment/upgrade（PRD 5.1/5.2）
+//      成功率随目标等级递减，失败惩罚随等级加重：
+//      2-4级失败降级；5-6级失败50%降级50%碎裂；7-9级失败碎裂
+// ────────────────────────────────────────
+message UpgradeRequest {
+  int64 player_id    = 1;  // 玩家ID
+  int64 equipment_id = 2;  // 待升级装备ID
+}
+
+message UpgradeResponse {
+  int32  code         = 1;
+  string msg          = 2;
+  bool   success      = 3;  // 是否升级成功
+  int32  result_level = 4;  // 结算后等级（失败可能降级）
+  bool   is_broken    = 5;  // 是否碎裂（高等级失败惩罚）
+  double success_rate = 6;  // 本次结算成功率（含运气加成，透明化展示）
+}
+
+// ────────────────────────────────────────
+// 【5】修理 POST /equipment/repair（PRD 9.2）
+//      耐久消耗 POST /equipment/durability/consume（战斗服务内部调用）
+// ────────────────────────────────────────
+message RepairRequest {
+  int64 player_id    = 1;  // 玩家ID
+  int64 equipment_id = 2;  // 待修理装备ID
+}
+
+message RepairResponse {
+  int32  code            = 1;
+  string msg             = 2;
+  int32  durability      = 3;  // 修理后耐久（回满300）
+  string material_used   = 4;  // 消耗的修理材料名称（按品质：铁/精铁/灵矿/仙玉/神石/道晶/先天精粹）
+  int32  material_count  = 5;  // 消耗数量
+}
+
+message DurabilityConsumeRequest {
+  int64 player_id    = 1;  // 玩家ID
+  int64 equipment_id = 2;  // 目标装备ID
+  int32 amount       = 3;  // 消耗点数
+}
+
+message DurabilityConsumeResponse {
+  int32  code       = 1;
+  string msg        = 2;
+  int32  durability = 3;  // 剩余耐久
+  bool   is_warning = 4;  // 是否低耐久警告（<10）
+  bool   is_broken  = 5;  // 是否归零碎裂（status置1，装备消失）
+}
+
+// ────────────────────────────────────────
+// 【6】掉落判定 POST /equipment/drop/roll（PRD 第十一章 + 技术方案 7.1）
+//      野怪死亡后由野怪服务/客户端触发，服务端权威掷骰
+//      最终概率 = base_rate × (1 + luck)；神话档命中时50%转神话碎片
+// ────────────────────────────────────────
+message DropRollRequest {
+  int64 player_id    = 1;  // 击杀玩家ID
+  int32 monster_type = 2;  // 怪物类型：1普通 2精英 3Boss 4妖 5神兽
+  int32 monster_tier = 3;  // 怪物阶位1-9（影响装备等级基准）
+}
+
+message DropRollResponse {
+  int32  code  = 1;
+  string msg   = 2;
+  repeated EquipmentInfo drops = 3;  // 本次掉落的装备列表（判定次数由怪物类型决定）
+  int32  shard_gained          = 4;  // 本次获得的神话碎片数量
+  int32  shard_total           = 5;  // 当前累计碎片数（集齐10可合成神话）
+  double luck                  = 6;  // 本次结算使用的运气值
+}
+
+// ────────────────────────────────────────
+// 【7】打造 POST /craft/do（PRD 第十章）
+//      成功率由"打造品级×产出品质"矩阵决定，材料+图纸+金币三消耗
+// ────────────────────────────────────────
+message CraftRequest {
+  int64 player_id = 1;  // 玩家ID
+  int32 recipe_id = 2;  // 图纸ID
+}
+
+message CraftResponse {
+  int32  code         = 1;
+  string msg          = 2;   // 失败原因：品级不足/材料不足/金币不足等
+  bool   success      = 3;   // 是否打造成功（失败消耗材料不产出）
+  EquipmentInfo equipment = 4;  // 成功产出的装备
+  double success_rate = 5;   // 本次结算成功率
+  CraftLevelInfo craft_level = 6;  // 打造后的品级进度（成功计数+1可能触发升级提示）
+}
+
+// 打造品级信息 GET /craft/level?player_id=
+message CraftLevelInfo {
+  int32  level              = 1;  // 品级：1学徒 2匠人 3巧匠 4大师 5宗师
+  string level_name         = 2;  // 品级中文名
+  int32  success_count_fan  = 3;  // 凡品成功数（学徒→匠人需300）
+  int32  success_count_zhen = 4;  // 珍品成功数（匠人→巧匠需500）
+  int32  success_count_ling = 5;  // 灵宝成功数（巧匠→大师500，大师→宗师900）
+  int32  success_count_xian = 6;  // 仙宝成功数（宗师满级需1000，满级解锁道宝合成）
+  bool   npc_certified      = 7;  // 是否已通过NPC拜师认证
+  bool   daobao_unlocked    = 8;  // 是否已解锁道宝合成（宗师满级）
+}
+
+message CraftLevelResponse {
+  int32 code = 1;
+  string msg = 2;
+  CraftLevelInfo info = 3;
+}
+
+// ────────────────────────────────────────
+// 【8】道宝合成 POST /craft/daobao（PRD 10.3）
+//      条件：宗师满级（仙宝成功数≥1000）；消耗10件仙宝
+//      成功率50% + luck×0.1；失败随机5件粉碎+5件破损（耐久=1）
+// ────────────────────────────────────────
+message DaobaoCombineRequest {
+  int64 player_id = 1;                 // 玩家ID
+  repeated int64 equipment_ids = 2;    // 10件仙宝装备ID（服务端校验数量/品质/归属/状态）
+}
+
+message DaobaoCombineResponse {
+  int32  code    = 1;
+  string msg     = 2;
+  bool   success = 3;                       // 是否合成成功
+  EquipmentInfo daobao = 4;                 // 成功产出的道宝
+  repeated int64 shattered_ids = 5;         // 失败时被粉碎的5件装备ID
+  repeated int64 damaged_ids   = 6;         // 失败时破损（耐久=1）的5件装备ID
+  double success_rate          = 7;         // 本次结算成功率
+}
+
+// ────────────────────────────────────────
+// 【9】神话碎片合成 POST /shard/combine（PRD 第十二章）
+//      集齐10片必定合成1件神话装备（槽位随机）
+// ────────────────────────────────────────
+message ShardCombineRequest {
+  int64 player_id = 1;  // 玩家ID
+}
+
+message ShardCombineResponse {
+  int32  code        = 1;
+  string msg         = 2;   // 失败原因：碎片不足10片
+  EquipmentInfo myth = 3;   // 合成产出的神话装备
+  int32  shard_left  = 4;   // 剩余碎片数
+}
+
+// ────────────────────────────────────────
+// 【10】神位继承 POST /inherit/activate、/inherit/duel-lost（PRD 第十六章）
+//       激活：消耗神话碎片继承神位技能；决斗失败：继承失效并记录
+// ────────────────────────────────────────
+message InheritActivateRequest {
+  int64 player_id = 1;  // 玩家ID
+}
+
+message InheritActivateResponse {
+  int32  code   = 1;
+  string msg    = 2;
+  bool   success = 3;                     // 是否激活成功
+  repeated string inherited_skills = 4;   // 继承获得的技能代号列表
+}
+
+message InheritDuelLostRequest {
+  int64 player_id = 1;  // 决斗失败的继承者玩家ID
+  int64 winner_id = 2;  // 决斗胜利者玩家ID（记录用）
+}
+
+message InheritDuelLostResponse {
+  int32  code = 1;
+  string msg  = 2;
+  bool   inherit_removed = 3;  // 继承是否已解除
+}
+
+// ────────────────────────────────────────
+// 【11】自由交易 POST /trade/create、/trade/execute（PRD 第十四章）
+//       装备完全自由交易不绑定；订单两阶段：创建→成交
+// ────────────────────────────────────────
+message TradeCreateRequest {
+  int64 seller_id    = 1;  // 卖方玩家ID
+  int64 equipment_id = 2;  // 挂售装备ID（服务端校验归属/未穿戴/未碎裂）
+  int64 price        = 3;  // 售价（金币）
+}
+
+message TradeCreateResponse {
+  int32  code     = 1;
+  string msg      = 2;
+  int64  order_id = 3;  // 订单ID（状态PENDING）
+}
+
+message TradeExecuteRequest {
+  int64 buyer_id = 1;  // 买方玩家ID
+  int64 order_id = 2;  // 订单ID
+}
+
+message TradeExecuteResponse {
+  int32  code = 1;
+  string msg  = 2;   // 失败原因：订单不存在/已成交/金币不足
+  EquipmentInfo equipment = 3;  // 成交后装备（owner已转移，source=trade）
+}
+
+// ────────────────────────────────────────
+// 【12】背包/仓库容量 GET /inventory/capacity?player_id=
+//       腰带按品质扩展背包格数与快捷栏（PRD 第十三章）
+// ────────────────────────────────────────
+message InventoryCapacityResponse {
+  int32  code              = 1;
+  string msg               = 2;
+  int32  base_slots        = 3;  // 基础背包格数
+  int32  belt_extra_slots  = 4;  // 腰带扩展格数（由已穿戴腰带品质决定）
+  int32  belt_quick_slots  = 5;  // 腰带快捷栏数
+  int32  total_slots       = 6;  // 总格数 = 基础 + 腰带扩展
+  int32  warehouse_slots   = 7;  // 仓库格数
+}

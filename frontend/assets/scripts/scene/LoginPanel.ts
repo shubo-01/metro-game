@@ -89,6 +89,15 @@ export class LoginPanel extends Component {
         // 绑定按钮事件
         this.wxLoginBtn?.on(Node.EventType.TOUCH_END, this._onWxLogin, this);
         this.phoneLoginBtn?.on(Node.EventType.TOUCH_END, this._onPhoneLogin, this);
+        this.sendCodeBtnLabel?.node?.parent?.on(Node.EventType.TOUCH_END, this._onSendCode, this);
+
+        // 绑定手机号面板的关闭按钮（通过名称查找）
+        if (this.bindPhonePanel) {
+            const closeBtn = this.bindPhonePanel.getChildByName('CloseBtn');
+            closeBtn?.on(Node.EventType.TOUCH_END, () => {
+                this.bindPhonePanel!.active = false;
+            }, this);
+        }
 
         // 隐藏弹窗
         if (this.bindPhonePanel) this.bindPhonePanel.active = false;
@@ -140,6 +149,21 @@ export class LoginPanel extends Component {
             this.serverStatusLabel.color = new Color().fromHEX(ThemeColor.TEXT_GRAY);
         }
 
+        // 按钮文字（强制在运行时设置，确保正确显示）
+        if (this.wxLoginBtn) {
+            const wxLabel = this.wxLoginBtn.getComponentInChildren(Label);
+            if (wxLabel) { wxLabel.string = '微信一键登录'; wxLabel.fontSize = 22; wxLabel.color = new Color(255, 255, 255, 255); }
+        }
+        if (this.phoneLoginBtn) {
+            const phoneLabel = this.phoneLoginBtn.getComponentInChildren(Label);
+            if (phoneLabel) { phoneLabel.string = '手机号登录'; phoneLabel.fontSize = 22; phoneLabel.color = new Color(255, 255, 255, 255); }
+        }
+        if (this.sendCodeBtnLabel) {
+            this.sendCodeBtnLabel.string = '获取验证码';
+            this.sendCodeBtnLabel.fontSize = 16;
+            this.sendCodeBtnLabel.color = new Color(255, 255, 255, 255);
+        }
+
         // Logo 呼吸动画
         if (this.titleLabel?.node) {
             tween(this.titleLabel.node)
@@ -174,8 +198,16 @@ export class LoginPanel extends Component {
                 },
             });
         } else {
-            // 非微信环境，使用模拟 code 测试
-            await this._doWxLogin('test_code_' + Date.now());
+            // 浏览器开发环境 — 模拟登录以便调试
+            this._showToast('[开发模式] 模拟微信登录...');
+            // 用模拟 token 直接进入角色创建/大厅
+            this._tokenManager.save('dev_token_' + Date.now(), 'dev_refresh_' + Date.now());
+            this._playerManager.init({ playerId: 1, name: '测试玩家', gender: 1 });
+            this._showToast('[开发模式] 登录成功，跳转角色创建...');
+            // 延迟跳转让用户看到提示
+            setTimeout(() => {
+                SceneManager.loadScene(SceneName.CharacterCreate);
+            }, 1500);
         }
     }
 
@@ -227,6 +259,13 @@ export class LoginPanel extends Component {
     // ═══════════════════════════════════════
 
     private async _onPhoneLogin() {
+        // 如果绑定面板还没显示，先展示让用户输入
+        if (this.bindPhonePanel && !this.bindPhonePanel.active) {
+            this.bindPhonePanel.active = true;
+            this._showToast('请输入手机号和验证码');
+            return;
+        }
+
         const phone = this.phoneInput?.string || '';
         const code = this.codeInput?.string || '';
 

@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package xunxian.monster;
+
+option go_package = "xunxian/proto/monster";
+
+// ═══════════════════════════════════════════
+//  Monster Service - 初始之地野怪系统消息定义
+//  严格按照《寻仙 - 初始之地野怪系统 PRD+技术方案》实现
+//  端口：8008
+// ═══════════════════════════════════════════
+
+// ────────────────────────────────────────
+// 【0】实体同步帧（技术方案 7.2）
+// ────────────────────────────────────────
+message EntitySync {
+  int64 entity_id = 1;   // 实体ID
+  int32 type      = 2;   // 实体类型：1普通 2精英 3Boss 4妖 5妖幼崽 6神兽 7神兽幼崽
+  float x         = 3;   // 当前X坐标
+  float y         = 4;   // 当前Y坐标
+  float hp        = 5;   // 当前气血
+  float max_hp    = 6;   // 气血上限
+  int32 element   = 7;   // 五行属性：1金 2木 3水 4火 5土
+  int32 state     = 8;   // 状态：0待机 1巡逻 2战斗 3死亡 4已被抓捕
+}
+
+// 协战围攻事件帧（技术方案 7.2）
+message SurroundEvent {
+  int64 player_id            = 1;  // 被围攻的玩家ID
+  repeated int64 monster_ids = 2;  // 围攻怪物实体ID列表
+  float coop_multiplier      = 3;  // 协战伤害倍率（服务端权威计算）
+  bool  is_sheng_cycle       = 4;  // 是否触发五行相生叠加
+}
+
+// ────────────────────────────────────────
+// 【1】领地列表 GET /monster/territories
+// ────────────────────────────────────────
+message TerritoryInfo {
+  int32  territory_id = 1;  // 领地ID（1-100）
+  string name         = 2;  // 领地名称
+  double center_x     = 3;  // 领地中心X
+  double center_y     = 4;  // 领地中心Y
+  double radius       = 5;  // 领地半径
+  int32  danger_level = 6;  // 危险等级：2外围~5妖殿
+}
+
+message TerritoryListResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated TerritoryInfo territories = 3;
+}
+
+// ────────────────────────────────────────
+// 【2】族群信息 GET /monster/faction?territory_id=
+// ────────────────────────────────────────
+message FactionInfo {
+  int32  faction_id      = 1;  // 族群实例ID
+  int32  species_id      = 2;  // 族群编号（1-100）
+  string species_name    = 3;  // 族群名称（山海经原型）
+  string source_text     = 4;  // 山海经出处
+  string form_desc       = 5;  // 形态描述
+  string trait_desc      = 6;  // 族群特点
+  int32  territory_id    = 7;  // 所属领地
+  int32  faction_group   = 8;  // 神兽分组（1-20）
+  bool   has_divine_beast = 9; // 神兽是否落在本族群领地
+}
+
+// ────────────────────────────────────────
+// 【3】怪物实体列表 GET /monster/list?faction_id=
+// ────────────────────────────────────────
+message MonsterEntityInfo {
+  int64  entity_id  = 1;   // 实体ID
+  int32  faction_id = 2;   // 所属族群
+  int32  species_id = 3;   // 族群编号
+  int32  type       = 4;   // 怪物类型：1-7
+  int32  tier       = 5;   // 等级阶位：1-9（人一阶~人九阶）
+  int32  element    = 6;   // 五行属性：1-5
+  int32  hp         = 7;   // 当前气血
+  int32  max_hp     = 8;   // 气血上限
+  int32  atk        = 9;   // 攻击力
+  int32  def        = 10;  // 防御力
+  int32  spd        = 11;  // 速度
+  int32  state      = 12;  // 状态
+  double pos_x      = 13;  // X坐标
+  double pos_y      = 14;  // Y坐标
+}
+
+message MonsterListResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated MonsterEntityInfo monsters = 3;
+}
+
+// ────────────────────────────────────────
+// 【4】协战倍率计算 POST /monster/coop/calc
+//     服务端实时计算围攻怪物列表倍率，客户端不可伪造
+// ────────────────────────────────────────
+message CoopCalcRequest {
+  int64 player_id            = 1;  // 被围攻玩家ID
+  repeated int64 entity_ids  = 2;  // 围攻怪物实体ID列表（服务端校验存在性与状态）
+}
+
+message CoopCalcResponse {
+  int32  code            = 1;
+  string msg             = 2;
+  int32  surround_count  = 3;  // 有效围攻数量
+  bool   same_element    = 4;  // 是否全同属性
+  bool   is_sheng_cycle  = 5;  // 是否构成五行相生链
+  bool   manman_paired   = 6;  // 是否含蛮蛮成对（最终倍率×2）
+  double coop_multiplier = 7;  // 最终协战伤害倍率
+}
+
+// ────────────────────────────────────────
+// 【5】怪物受击 POST /monster/hit
+//     服务端权威扣血，抓捕的血量条件以此为准
+// ────────────────────────────────────────
+message MonsterHitRequest {
+  int64 player_id = 1;  // 攻击者玩家ID
+  int64 entity_id = 2;  // 被攻击怪物实体ID
+  int32 damage    = 3;  // 伤害值（后续接入战斗服务后由服务端计算）
+}
+
+message MonsterHitResponse {
+  int32  code       = 1;
+  string msg        = 2;
+  int32  hp         = 3;  // 扣血后剩余气血
+  int32  max_hp     = 4;  // 气血上限
+  bool   is_dead    = 5;  // 是否死亡
+  double hp_percent = 6;  // 剩余血量百分比（抓捕条件判断用）
+}
+
+// ────────────────────────────────────────
+// 【6】抓捕 POST /capture/attempt（技术方案 6.1/6.2）
+// ────────────────────────────────────────
+message CaptureRequest {
+  int64 player_id    = 1;  // 玩家ID
+  int64 entity_id    = 2;  // 目标实体ID（仅妖幼崽/神兽幼崽可抓）
+  int32 item_quality = 3;  // 抓捕道具品质：1普通 2稀有 3传说
+}
+
+message CaptureResponse {
+  int32  code         = 1;
+  string msg          = 2;
+  bool   success      = 3;  // 是否抓捕成功
+  double capture_rate = 4;  // 本次结算成功率（透明化展示）
+  int32  species_id   = 5;  // 成功时返回的族群编号（宠物/坐骑原型）
+  int32  element      = 6;  // 成功时目标的五行属性
+}
+
+// ────────────────────────────────────────
+// 【7】神兽状态 GET /monster/divine/status
+// ────────────────────────────────────────
+message DivineBeastInfo {
+  int64  beast_id        = 1;  // 神兽ID
+  int32  species_id      = 2;  // 原型族群编号
+  string species_name    = 3;  // 原型族群名称
+  int32  faction_group   = 4;  // 所属分组（1-20）
+  int32  territory_id    = 5;  // 实际落点领地
+  bool   is_captured     = 6;  // 神兽本体是否已消灭
+  bool   cub_is_captured = 7;  // 神兽幼崽是否已被抓捕（全服唯一）
+  int64  cub_capturer_id = 8;  // 抓捕幼崽的玩家ID
+}
+
+message DivineStatusResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated DivineBeastInfo beasts = 3;  // 全服20只神兽状态
+}

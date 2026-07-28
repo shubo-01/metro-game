@@ -1,0 +1,894 @@
+
+| 寻仙 装备系统 PRD + 技术方案 9品质体系 · 8甲4首饰武器 · 套装效果 · 打造系统 · 神位继承 2026年7月17日 |
+
+目录
+# 第一部分：产品设计文档
+## 一、系统总述
+装备系统是寻仙核心成长线之一，与人物系统、副本系统、野怪系统深度耦合。玩家通过副本掉落、野怪掉落、打造三条路径获取装备，通过穿戴装备提升精/神/气三围属性及附加战斗属性。装备系统同时承载了神位继承的关键入口——神话碎片合成完整神话后开启神位继承资格，将装备系统与PVP对抗（大道争锋）串联。
+本系统覆盖以下核心模块：装备槽位结构、品质体系、基础加成、套装效果、装备等级与升级、附加属性、武器类型与攻击形状、耐久与修理、打造系统、掉落系统、神话碎片与神位继承、腰带特殊功能、仓库系统、装备外观、交易系统、穿戴境界限制。
+## 二、装备槽位结构
+角色装备槽位共分三大类：穿戴甲、首饰、武器。总计12~19个槽位（取决于副武器解锁数量）。
+
+| \u5927\u7c7b | \u69fd\u4f4d | \u6570\u91cf | \u52a0\u6210\u5c5e\u6027 |
+| \u7a7f\u6234\u7532 | \u5934\u7532/\u9762\u7532/\u8eaf\u7532/\u88c8\u7532/\u817f\u7532/\u8db3\u7532/\u81c2\u7532/\u8170\u5e26 | 8 | \u7cbe |
+| \u9996\u9970 | \u624b\u956f/\u6212\u6307/\u8033\u73af/\u9879\u94fe | 4 | \u795e |
+| \u6b66\u5668 | \u4e3b\u6b66\u5668\u00d71 + \u526f\u6b66\u5668\u00d71~8 | 2~9 | \u6c14 |
+
+### 2.1 副武器档位
+副武器数量由角色技能和身份决定，分三档：
+
+| \u6863\u4f4d | \u526f\u6b66\u5668\u6570\u91cf | \u89e3\u9501\u6761\u4ef6 | \u51e1\u54c1\u603b\u6c14\u52a0\u6210 |
+| \u5e38\u89c4 | 1 | \u9ed8\u8ba4 | 1 |
+| \u4e09\u5934\u516d\u81c2 | 5 | \u5f00\u542f\u4e09\u5934\u516d\u81c2\u6280\u80fd | 3 |
+| \u7279\u6b8a\u4eba\u7269 | 8 | \u7279\u6b8a\u9014\u5f84\u89e3\u9501\uff08\u6761\u4ef6\u7559\u767d\uff09 | 5 |
+
+副武器数量在1~5之间和5~8之间采用线性插值计算总加成。实际装备数n对应的凡品总气基数：
+
+| \u526f\u6b66\u5668\u6570 | \u51e1\u54c1\u603b\u6c14\u57fa\u6570 | \u8ba1\u7b97\u516c\u5f0f |
+| 1 | 1 | \u57fa\u51c6 |
+| 2 | 1.5 | 1 + (2-1)\u00d7(3-1)/(5-1) |
+| 3 | 2 | 1 + (3-1)\u00d7(3-1)/(5-1) |
+| 4 | 2.5 | 1 + (4-1)\u00d7(3-1)/(5-1) |
+| 5 | 3 | 1 + (5-1)\u00d7(3-1)/(5-1) |
+| 6 | 3.67 | 3 + (6-5)\u00d7(5-3)/(8-5) |
+| 7 | 4.33 | 3 + (7-5)\u00d7(5-3)/(8-5) |
+| 8 | 5 | 3 + (8-5)\u00d7(5-3)/(8-5) |
+
+最终武器总加成 = 品质倍率 × 上述基数。每件副武器独立计算品质加成，可混穿不同品质。
+## 三、品质体系
+装备共分9个品质等级，每个品质对应一个加成倍率。倍率以凡品为基准（×1）。
+
+| \u54c1\u8d28 | \u500d\u7387 | \u7532\u7c7b\uff08\u7cbe\uff09 | \u9996\u9970\uff08\u795e\uff09 | \u6b66\u56681\u4e3b1\u526f\uff08\u6c14\uff09 | \u6b66\u56681\u4e3b5\u526f\uff08\u6c14\uff09 | \u6b66\u56681\u4e3b8\u526f\uff08\u6c14\uff09 | \u5907\u6ce8 |
+| \u51e1\u54c1 | \u00d71 | 1 | 1 | 1 | 3 | 5 | \u57fa\u7840\u54c1\u8d28 |
+| \u73cd\u54c1 | \u00d72 | 2 | 2 | 2 | 6 | 10 |  |
+| \u795e\u8bdd\u788e\u7247 | \u00d72.5 | 2.5 | 2.5 | 2.5 | 7.5 | 12.5 | \u53ef\u5408\u6210\u5b8c\u6574\u795e\u8bdd |
+| \u7075\u5b9d | \u00d73 | 3 | 3 | 3 | 9 | 15 |  |
+| \u4ed9\u5b9d | \u00d75 | 5 | 5 | 5 | 15 | 25 |  |
+| \u795e\u8bdd | \u00d77 | 7 | 7 | 7 | 21 | 35 | \u788e\u72473\u54081 |
+| \u9053\u5b9d | \u00d79 | 9 | 9 | 9 | 27 | 45 | \u5b97\u5e08\u5408\u6210\u4ea7\u51fa |
+| \u5148\u5929\u7075\u5b9d | \u00d712 | 12 | 12 | 12 | 36 | 60 | \u7279\u6b8a\u673a\u5236\uff08\u7559\u767d\uff09 |
+| \u529f\u5fb7\u7075\u5b9d | \u00d712 | 12 | 12 | 12 | 36 | 60 | \u7279\u6b8a\u673a\u5236\uff0c\u524d\u671f\u4e0d\u51fa |
+
+说明：表中数值为装备等级1级时的基准加成。装备等级1~10级，10级时基准加成翻倍。
+## 四、基础加成系统
+装备基础加成只增加精/神/气三种属性。三大类装备分别对应不同属性：
+
+| \u88c5\u5907\u5927\u7c7b | \u52a0\u6210\u5c5e\u6027 | \u51e1\u54c18\u4ef6/4\u4ef6/2\u4ef6\u603b\u548c\uff081\u7ea7\uff09 | \u5206\u914d\u65b9\u5f0f |
+| \u7a7f\u6234\u7532\uff088\u4ef6\uff09 | \u7cbe | 1 | \u5168\u968f\u673a\u5206\u914d |
+| \u9996\u9970\uff084\u4ef6\uff09 | \u795e | 1 | \u5168\u968f\u673a\u5206\u914d |
+| \u6b66\u5668\uff08\u4e3b+\u526f\uff09 | \u6c14 | 1\uff081\u4e3b1\u526f\uff09 | \u72ec\u7acb\u8ba1\u7b97\u6c42\u548c |
+
+### 4.1 甲类加成规则
+8件甲独立计算品质加成，每件按自身品质×（凡品基准1精/8件）
+每件装备生成时随机分配属性值，8件总和=品质倍率×1精
+不同部位可不同品质，混穿独立求和
+示例：凡品8件甲总和=1精（随机分配到8件上），珍品8件甲总和=2精，先天灵宝8件甲总和=12精。
+### 4.2 首饰加成规则
+4件首饰独立计算品质加成，每件按自身品质×（凡品基准1神/4件）
+每件装备生成时随机分配属性值，4件总和=品质倍率×1神
+不同部位可不同品质，混穿独立求和
+### 4.3 武器加成规则
+主武器和副武器独立计算品质加成
+副武器按实际装备数线性插值（见2.1节）
+主武器与副武器可不同品质，各自独立计算后求和
+示例：主武器凡品+1副凡品=1气；主武器仙宝+5副仙品=5×5=25气；主武器凡品+5副珍品=1×1+5×2/3≈4.33气。
+## 五、装备等级与升级
+### 5.1 等级体系
+每件装备有1~10级，等级与角色境界段对应。穿戴要求=达到对应境界段。
+
+| \u54c1\u8d28 | \u88c5\u5907\u7b49\u7ea7\u8303\u56f4 | \u5bf9\u5e94\u5883\u754c\u6bb5 | \u7a7f\u6234\u5883\u754c\u8981\u6c42 |
+| \u51e1\u54c1 | 1~10\u7ea7 | \u4eba\u96361~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u4eba\u9636 |
+| \u73cd\u54c1 | 1~10\u7ea7 | \u4eba\u96361~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u4eba\u9636 |
+| \u7075\u5b9d | 1~10\u7ea7 | \u771f\u4eba1~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u771f\u4eba |
+| \u4ed9\u5b9d | 1~10\u7ea7 | \u771f\u4eba1~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u771f\u4eba |
+| \u795e\u8bdd | 1~10\u7ea7 | \u4ed91~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u4ed9 |
+| \u9053\u5b9d | 1~10\u7ea7 | \u4ed91~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u4ed9 |
+| \u5148\u5929\u7075\u5b9d | 1~10\u7ea7 | \u91d1\u4ed91~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u91d1\u4ed9 |
+| \u529f\u5fb7\u7075\u5b9d | 1~10\u7ea7 | \u91d1\u4ed91~10\u6bb5 | \u5bf9\u5e94\u6bb5\u4f4d\u91d1\u4ed9 |
+
+装备等级1级=基准值×1，10级=基准值×2。线性递增。
+加成公式：实际加成 = 品质倍率 × 基础基数 × (1 + (装备等级-1)/9)
+### 5.2 装备升级机制
+装备可通过消耗材料升级，逐步从1级升至10级。升级消耗同品质材料+钱。
+
+| \u5347\u7ea7 | \u6210\u529f\u7387 | \u5931\u8d25\u540e\u679c | \u8fd0\u6c14\u52a0\u6210 |
+| 1\u21922 | 100% | \u2014 | \u2014 |
+| 2\u21923 | 95% | \u964d1\u7ea7 | 1\u70b9\u6c14\u8fd0+10% |
+| 3\u21924 | 90% | \u964d1\u7ea7 | 1\u70b9\u6c14\u8fd0+10% |
+| 4\u21925 | 80% | \u964d1\u7ea7 | 1\u70b9\u6c14\u8fd0+10% |
+| 5\u21926 | 70% | 50%\u964d\u7ea7/50%\u788e\u88c2 | 1\u70b9\u6c14\u8fd0+10% |
+| 6\u21927 | 60% | 50%\u964d\u7ea7/50%\u788e\u88c2 | 1\u70b9\u6c14\u8fd0+10% |
+| 7\u21928 | 55% | \u788e\u88c2 | 1\u70b9\u6c14\u8fd0+10% |
+| 8\u21929 | 52% | \u788e\u88c2 | 1\u70b9\u6c14\u8fd0+10% |
+| 9\u219210 | 50% | \u788e\u88c2 | 1\u70b9\u6c14\u8fd0+10% |
+
+运气加成即角色气运属性，每1点气运提升10%成功率，上限100%。与打造系统一致。
+装备等级来源：生成时固定（掉落/打造时随机1~10级）或材料升级（1→2→3…逐步升，不可跳级）。
+## 六、套装效果
+### 6.1 套装触发条件
+穿戴甲8件 + 首饰4件全部同品质，触发套装效果
+武器不参与套装判定
+穿齐套装那一刻系统随机生成0~80%的浮动值，锁定
+更换任意一件装备则套装解除，重新穿齐后重新计算浮动值
+### 6.2 套装加成计算
+套装基础值 = 品质倍率 × 1（甲基础1精 + 首饰基础1神的合并基数）
+套装浮动加成 = 套装基础值 × 随机浮动值(0~80%)
+浮动加成随机分配到精/神/气其中一个属性上。
+示例：凡品全套（8甲+4首饰同凡品），基础值=1，浮动随机到50%，则额外加成=0.5，随机分配到精/神/气其中一个。
+示例：先天灵宝全套，基础值=12，浮动随机到80%，则额外加成=9.6，随机分配到精/神/气其中一个。
+## 七、附加属性系统
+除基础精/神/气加成外，装备还随机附带附加属性。附加属性是装备的核心功能扩展，所有品质都可能附带，高品质概率更高、数值更高。附加属性随装备等级提升而提升。
+### 7.1 附加属性数量
+
+| \u54c1\u8d28 | \u9644\u52a0\u5c5e\u6027\u6570\u91cf | \u8bf4\u660e |
+| \u51e1\u54c1 | 0~1\u4e2a | \u53ef\u80fd\u65e0\u9644\u52a0\u5c5e\u6027 |
+| \u73cd\u54c1 | 1~2\u4e2a |  |
+| \u7075\u5b9d | 1~3\u4e2a |  |
+| \u4ed9\u5b9d | 2~3\u4e2a |  |
+| \u795e\u8bdd | 2~4\u4e2a |  |
+| \u9053\u5b9d | 3~4\u4e2a |  |
+| \u5148\u5929\u7075\u5b9d | 3~5\u4e2a |  |
+| \u795e\u8bdd\u788e\u7247 | 0\u4e2a | \u5408\u6210\u5b8c\u6574\u795e\u8bdd\u540e\u624d\u751f\u6210\u9644\u52a0\u5c5e\u6027 |
+
+### 7.2 百分比类属性
+
+| \u5c5e\u6027 | \u51e1\u54c1 | \u73cd\u54c1 | \u7075\u5b9d | \u4ed9\u5b9d | \u795e\u8bdd | \u9053\u5b9d | \u5148\u5929\u7075\u5b9d |
+| \u66b4\u51fb\u7387 | 0~1% | 1~2% | 2~4% | 4~7% | 7~10% | 10~14% | 14~20% |
+| \u95ea\u907f\u7387 | 0~1% | 1~2% | 2~3% | 3~5% | 5~8% | 8~12% | 12~18% |
+| \u547d\u4e2d\u7387 | 0~2% | 2~4% | 4~6% | 6~10% | 10~14% | 14~18% | 18~25% |
+| \u7a7f\u900f | 0~1% | 1~2% | 2~3% | 3~5% | 5~8% | 8~12% | 12~18% |
+| \u5438\u8840 | 0~0.5% | 0.5~1% | 1~1.5% | 1.5~3% | 3~5% | 5~7% | 7~10% |
+| \u53cd\u4f24 | 0~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% | 10~15% |
+
+### 7.3 元素类属性（固定值）
+
+| \u5c5e\u6027 | \u51e1\u54c1 | \u73cd\u54c1 | \u7075\u5b9d | \u4ed9\u5b9d | \u795e\u8bdd | \u9053\u5b9d | \u5148\u5929\u7075\u5b9d |
+| \u5143\u7d20\u6297\u6027 | 0~2 | 2~5 | 5~10 | 10~15 | 15~25 | 25~35 | 35~50 |
+| \u5143\u7d20\u4f24\u5bb3 | 0~2 | 2~5 | 5~10 | 10~15 | 15~25 | 25~35 | 35~50 |
+
+### 7.4 特殊效果类属性
+
+| \u5c5e\u6027 | \u51e1\u54c1 | \u73cd\u54c1 | \u7075\u5b9d | \u4ed9\u5b9d | \u795e\u8bdd | \u9053\u5b9d | \u5148\u5929\u7075\u5b9d |
+| \u51b0\u51bb\u6982\u7387 | 0~0.3% | 0.3~0.8% | 0.8~1.5% | 1.5~3% | 3~5% | 5~7% | 7~10% |
+| \u707c\u70e7\u6982\u7387 | 0~0.3% | 0.3~0.8% | 0.8~1.5% | 1.5~3% | 3~5% | 5~7% | 7~10% |
+| \u51fb\u9000 | 0~0.5% | 0.5~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% |
+| \u7729\u6655 | 0~0.3% | 0.3~0.5% | 0.5~1% | 1~2% | 2~3% | 3~5% | 5~8% |
+
+### 7.5 功能类属性
+
+| \u5c5e\u6027 | \u51e1\u54c1 | \u73cd\u54c1 | \u7075\u5b9d | \u4ed9\u5b9d | \u795e\u8bdd | \u9053\u5b9d | \u5148\u5929\u7075\u5b9d |
+| \u79fb\u901f | 0~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% | 10~15% |
+| \u653b\u901f | 0~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% | 10~15% |
+| \u8df3\u8dc3 | 0~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% | 10~15% |
+| \u51b7\u5374\u7f29\u51cf | 0~0.5% | 0.5~1% | 1~2% | 2~3% | 3~5% | 5~7% | 7~10% |
+
+附加属性数值随装备等级提升而提升，提升比例与基础加成一致（1级=基准，10级=2倍）。
+## 八、武器类型与攻击形状
+武器类型决定攻击判定区域（攻击形状）。不同攻击形状伤害相同，仅范围和方向不同。副武器只加属性，不影响攻击形状（以主武器形状为准）。
+
+| \u6b66\u5668\u7c7b\u578b | \u653b\u51fb\u5f62\u72b6 | \u7279\u70b9 |
+| \u5200/\u5251 | \u524d\u65b9\u6247\u5f62 | \u4e2d\u8ddd\u79bb\uff0c\u9002\u4e2d\u8303\u56f4 |
+| \u67aa/\u621f | \u524d\u65b9\u76f4\u7ebf | \u8fdc\u8ddd\u79bb\uff0c\u7a84\u8303\u56f4 |
+| \u9524/\u65a7 | \u5468\u8eab\u5706\u5f62 | \u8fd1\u8ddd\u79bb\uff0c\u5927\u8303\u56f4 |
+| \u5f13/\u5f29 | \u6307\u5b9a\u70b9\u5706\u5f62 | \u8fdc\u7a0b\uff0c\u7cbe\u51c6 |
+| \u6247/\u7b1b | \u524d\u65b9\u6247\u5f62+\u540e\u65b9\u5c0f\u6247\u5f62 | \u4e2d\u8ddd\u79bb\uff0c\u517c\u987e\u524d\u540e |
+| \u6cd5\u6756 | \u81ea\u8eab\u4e3a\u4e2d\u5fc3\u5927\u5706 | \u4e2d\u8ddd\u79bb\uff0c\u5168\u5411 |
+
+主武器与副武器可不同类型，攻击时以主武器形状为准，副武器仅提供属性加成。副武器有独立1~10级，独立升级。
+## 九、装备耐久与修理
+### 9.1 耐久系统
+每件装备耐久上限：300点
+每次受击/攻击扣1点耐久
+耐久低于10时装备变红警告
+耐久归零：装备碎裂消失（无保险机制）
+### 9.2 修理系统
+修理需要材料+钱。材料按装备品质分级：
+
+| \u88c5\u5907\u54c1\u8d28 | \u4fee\u7406\u6750\u6599 | \u6750\u6599\u6765\u6e90 |
+| \u51e1\u54c1 | \u94c1 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u73cd\u54c1 | \u7cbe\u94c1 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u7075\u5b9d | \u7075\u77ff | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u4ed9\u5b9d | \u4ed9\u7389 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u795e\u8bdd | \u795e\u77f3 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u9053\u5b9d | \u9053\u6676 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+| \u5148\u5929\u7075\u5b9d | \u5148\u5929\u7cbe\u7cb9 | \u526f\u672c/\u91ce\u602a\u6389\u843d |
+
+## 十、打造系统
+### 10.1 打造品级树
+打造系统分5个品级，品级越高可打造的品质越多、成功率越高。升级方式：打造次数积累 + NPC拜师/任务。
+
+| \u54c1\u7ea7 | \u51e1\u54c1 | \u73cd\u54c1 | \u7075\u5b9d | \u4ed9\u5b9d | \u5347\u7ea7\u6761\u4ef6 |
+| \u5b66\u5f92 | 30% | \u2014 | \u2014 | \u2014 | \u6210\u529f\u6253\u9020300\u4ef6\u51e1\u54c1 |
+| \u5320\u4eba | 70% | 30% | \u2014 | \u2014 | \u6210\u529f\u6253\u9020500\u4ef6\u73cd\u54c1 |
+| \u5de7\u5320 | 90% | 60% | 10% | \u2014 | \u6210\u529f\u6253\u9020500\u4ef6\u7075\u5b9d |
+| \u5927\u5e08 | 100% | 80% | 50% | \u2014 | \u6210\u529f\u6253\u9020900\u4ef6\u7075\u5b9d |
+| \u5b97\u5e08 | 100% | 80% | 70% | 50% | \u6210\u529f\u6253\u90201000\u4ef6\u4ed9\u5b9d |
+
+升级需要同时满足：打造次数积累 + NPC拜师/任务
+1点气运提升10%成功率，上限100%
+打造消耗：材料 + 图纸 + 钱
+打造出的装备等级随机（1~10级）
+### 10.2 图纸来源
+
+| \u6765\u6e90 | \u8bf4\u660e |
+| \u526f\u672c/\u91ce\u602a\u6389\u843d | \u51fb\u6740\u602a\u7269\u6709\u6982\u7387\u6389\u843d\u56fe\u7eb8 |
+| NPC\u8d2d\u4e70 | \u57ce\u9547NPC\u5904\u53ef\u8d2d\u4e70\u57fa\u7840\u56fe\u7eb8 |
+| \u4efb\u52a1\u5956\u52b1 | \u5b8c\u6210\u4efb\u52a1\u83b7\u5f97\u56fe\u7eb8\u5956\u52b1 |
+
+不同品级图纸对应不同品质装备。高级图纸稀有度更高。
+### 10.3 道宝合成（宗师专属）
+宗师满级（成功打造1000件仙宝）后开启道宝合成功能。
+
+| \u5408\u6210 | \u6d88\u8017 | \u6210\u529f\u7387 | \u5931\u8d25\u540e\u679c |
+| 10\u4ef6\u4ed9\u5b9d\u21921\u4ef6\u9053\u5b9d | 10\u4ef6\u4ed9\u5b9d | 50% | \u968f\u673a5\u4ef6\u7c89\u788e\uff08\u6d88\u5931\uff09+5\u4ef6\u7834\u635f\uff08\u53ef\u4fee\u590d\uff09 |
+
+气运提升成功率：1点气运+10%。神话以上品质不可通过打造获得，仅靠掉落。
+## 十一、掉落系统
+### 11.1 品质掉落概率
+装备掉落时各品质的基础概率：
+
+| \u54c1\u8d28 | \u57fa\u7840\u6982\u7387 | \u8bf4\u660e |
+| \u51e1\u54c1 | 93% | \u6700\u5e38\u89c1 |
+| \u73cd\u54c1 | 5% |  |
+| \u7075\u5b9d | 1% |  |
+| \u4ed9\u5b9d | 0.5% |  |
+| \u795e\u8bdd | 0.35% | \u62163\u4e2a\u795e\u8bdd\u788e\u7247 |
+| \u9053\u5b9d | 0.1% |  |
+| \u5148\u5929\u7075\u5b9d | 0.05% | \u7279\u6b8a\u673a\u5236\uff08\u7559\u767d\uff09 |
+| \u529f\u5fb7\u7075\u5b9d | 0.05% | \u524d\u671f\u4e0d\u51fa |
+
+气运提升概率：按副本系统计算逻辑（运气×(1+luck)）。
+### 11.2 野怪掉落对照
+不同类型野怪的掉落品质范围：
+
+| \u602a\u7269\u7c7b\u578b | \u4e3b\u6389\u843d | \u4f4e\u6982\u7387\u6389\u843d | \u4f4d\u7f6e |
+| \u666e\u901a\u602a | \u51e1\u54c1 | \u73cd\u54c1\uff08\u6781\u4f4e\uff09 | \u5916\u56f4\uff0c\u6bcf\u65cf\u7fa450\u53ea |
+| \u7cbe\u82f1\u602a | \u51e1\u54c1+\u73cd\u54c1 | \u7075\u5b9d\uff08\u6781\u4f4e\uff09 | \u5916\u56f4\uff0c\u6bcf\u65cf\u7fa410\u53ea |
+| Boss\u602a | \u51e1\u54c1+\u73cd\u54c1 | \u7075\u5b9d\uff08\u4e2d\u7b49\u6982\u7387\uff09 | \u5916\u56f4+\u4e2d\u5fc3\uff0c\u6bcf\u65cf\u7fa42\u53ea |
+| \u5996 | \u73cd\u54c1+\u7075\u5b9d | \u4ed9\u5b9d\uff08\u6781\u4f4e\uff09 | \u4e2d\u5fc3/\u6838\u5fc3/\u5996\u6bbf\uff0c\u6bcf\u65cf\u7fa41\u53ea |
+| \u795e\u517d | \u7075\u5b9d~\u4ed9\u5b9d | \u795e\u8bdd\uff08\u6781\u4f4e\uff09 | \u5996\u6bbf\uff0c\u6bcf5\u65cf\u5171\u4eab1\u53ea\uff0c\u552f\u4e00\u4e0d\u5237\u65b0 |
+
+## 十二、神话碎片与神位继承
+### 12.1 神话碎片
+3个神话碎片合成1件完整神话装备
+碎片独立掉落（掉落概率见11.1节）
+神话之上品质不可分解
+碎片本身无附加属性，合成完整神话后才生成附加属性
+碎片品质倍率×2.5（介于珍品和灵宝之间）
+### 12.2 神位继承
+神话碎片的核心功能是开启神位继承。拥有碎片即可获得神位继承资格。
+
+| \u673a\u5236 | \u8bf4\u660e |
+| \u7ee7\u627f\u8d44\u683c | \u62e5\u6709\u795e\u8bdd\u788e\u7247\u5373\u83b7\u5f97 |
+| \u7ee7\u627f\u5185\u5bb9 | \u7ee7\u627f\u90e8\u5206\u795e\u8bdd\u4eba\u7269\u7684\u6280\u80fd |
+| \u7ed1\u5b9a\u65b9\u5f0f | \u7ed1\u5b9a\u4eba\u7269\uff0c\u4e0d\u53ef\u8f6c\u79fb |
+| \u6389\u843d\u65b9\u5f0f | \u4ec5\u901a\u8fc7\u5927\u9053\u4e89\u950b\uff08PVP\u5bf9\u6297\uff09\u6389\u843d |
+| \u6389\u843d\u540e\u679c | \u788e\u7247\u8f6c\u79fb\u7ed9\u80dc\u8005\uff0c\u7ee7\u627f\u7684\u6280\u80fd\u7070\u5316\u65e0\u6cd5\u4f7f\u7528 |
+| \u540e\u7eed\u6269\u5c55 | \u7559\u767d |
+
+神位继承将装备系统与PVP对抗（大道争锋）深度串联，形成装备→权力→对抗的完整循环。
+## 十三、腰带特殊功能
+腰带除了提供基础精加成外，还提供额外的背包格和快捷栏。不同品质腰带的扩展数量：
+
+| \u54c1\u8d28 | \u989d\u5916\u80cc\u5305\u683c | \u5feb\u6377\u680f | \u603b\u80cc\u5305\u5bb9\u91cf\uff08\u57fa\u784020\uff09 |
+| \u51e1\u54c1 | +2 | +1 | 22 |
+| \u73cd\u54c1 | +4 | +2 | 24 |
+| \u7075\u5b9d | +6 | +3 | 26 |
+| \u4ed9\u5b9d | +8 | +4 | 28 |
+| \u795e\u8bdd | +10 | +5 | 30 |
+| \u9053\u5b9d | +12 | +6 | 32 |
+| \u5148\u5929\u7075\u5b9d | +16 | +8 | 36 |
+
+基础背包容量为20格。腰带扩展的背包格和快捷栏随腰带品质提升而增加。
+## 十四、仓库系统
+
+| \u83b7\u53d6\u65b9\u5f0f | \u8bf4\u660e |
+| \u8d2d\u4e70\u623f\u4ea7 | \u5728\u57ce\u5185\u8d2d\u4e70\u623f\u5c4b\u540e\u83b7\u5f97\u4ed3\u5e93 |
+| \u79df\u7528\u4ed3\u5e93 | \u73a9\u5bb6\u53ef\u79df\u7528\u4ed3\u5e93 |
+
+仓库提供额外的存储空间，玩家可将装备和物品存入仓库。仓库容量和租赁费用待定。
+## 十五、装备外观
+只武器+甲影响角色外观，首饰不影响
+穿了什么甲角色就显示什么样子
+8件甲分层显示：头甲→头部模型、躯甲→上身模型、腿甲→腿部模型等
+武器显示在角色手中，根据武器类型显示对应模型
+## 十六、交易系统
+装备完全自由交易，不绑定
+未穿戴/已穿戴的装备均可交易
+无锁定功能
+所有品质均可交易（包括仙宝以上）
+## 十七、穿戴境界限制
+装备穿戴只看境界，不看角色等级。穿戴要求=装备等级×品质对应境界段。
+
+| \u54c1\u8d28 | \u5bf9\u5e94\u5883\u754c | \u7a7f\u6234\u8981\u6c42 |
+| \u51e1\u54c1 | \u4eba\u96361~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u73cd\u54c1 | \u4eba\u96361~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u7075\u5b9d | \u771f\u4eba1~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u4ed9\u5b9d | \u771f\u4eba1~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u795e\u8bdd | \u4ed91~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u9053\u5b9d | \u4ed91~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u5148\u5929\u7075\u5b9d | \u91d1\u4ed91~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+| \u529f\u5fb7\u7075\u5b9d | \u91d1\u4ed91~10\u6bb5 | \u8fbe\u5230\u5bf9\u5e94\u6bb5\u4f4d |
+
+## 十八、留白模块
+以下模块暂不展开，后续迭代补充：
+
+| \u6a21\u5757 | \u7559\u767d\u8bf4\u660e |
+| \u88c5\u5907\u5206\u89e3 | \u5206\u89e3\u4ea7\u51fa\u548c\u673a\u5236\u5f85\u5b9a |
+| \u88c5\u5907\u5f3a\u5316 | \u5f3a\u5316\u7cfb\u7edf\u5f85\u5b9a |
+| \u88c5\u5907\u6d17\u7ec3 | \u6d17\u7ec3\u673a\u5236\u5f85\u5b9a |
+| \u5148\u5929\u7075\u5b9d\u7279\u6b8a\u673a\u5236 | \u5f85\u5b9a |
+| \u529f\u5fb7\u7075\u5b9d\u7279\u6b8a\u673a\u5236 | \u524d\u671f\u4e0d\u51fa\uff0c\u540e\u671f\u8865\u5145 |
+| 8\u526f\u6b66\u5668\u89e3\u9501\u6761\u4ef6 | \u7279\u6b8a\u4eba\u7269\u89e3\u9501\u9014\u5f84\u5f85\u5b9a |
+| \u795e\u4f4d\u7ee7\u627f\u8be6\u7ec6\u8bbe\u8ba1 | \u540e\u7eed\u5355\u72ec\u6a21\u5757\u5c55\u5f00 |
+
+# 第二部分：技术方案
+## 一、技术栈总览
+
+| \u5c42\u7ea7 | \u6280\u672f\u9009\u578b | \u8bf4\u660e |
+| \u5ba2\u6237\u7aef | Cocos Creator 3.8 | \u6a2a\u5c4f\u5c0f\u6e38\u620f + \u539f\u751fApp\u8de8\u5e73\u53f0 |
+| \u540e\u7aef\u8bed\u8a00 | Go 1.22 | \u5fae\u670d\u52a1\u67b6\u6784 |
+| \u5fae\u670d\u52a1\u6846\u67b6 | Kratos | \u8f93\u5165\u8f93\u51fa\u89c4\u8303\u5316 |
+| \u6570\u636e\u5e93 | MySQL 8.0\uff08\u963f\u91cc\u4e91RDS\uff09 | \u4e3b\u5e93 + \u6218\u6597\u5e93 + \u914d\u7f6e\u5e93 + \u65e5\u5fd7\u5e93 |
+| \u7f13\u5b58 | Redis Tair | \u88c5\u5907\u5b9e\u4f8b\u7f13\u5b58 / \u80cc\u5305\u7f13\u5b58 / \u4ea4\u6613\u7f13\u5b58 |
+| \u901a\u4fe1 | WebSocket + Protobuf | 20Hz Tick \u540c\u6b65 |
+| \u6d88\u606f\u961f\u5217 | NSQ | \u88c5\u5907\u6389\u843d / \u8010\u4e45\u6d88\u8017 / \u4ea4\u6613\u4e8b\u4ef6 |
+
+## 二、微服务划分
+
+| \u670d\u52a1\u540d | \u804c\u8d23 |
+| equipment_service | \u88c5\u5907\u5b9e\u4f8b\u7ba1\u7406\u3001\u7a7f\u6234/\u5378\u4e0b\u3001\u52a0\u6210\u8ba1\u7b97\u3001\u5957\u88c5\u5224\u5b9a |
+| inventory_service | \u80cc\u5305\u7ba1\u7406\u3001\u4ed3\u5e93\u7ba1\u7406\u3001\u8170\u5e26\u6269\u5c55\u683c |
+| craft_service | \u6253\u9020\u7cfb\u7edf\u3001\u54c1\u7ea7\u7ba1\u7406\u3001\u56fe\u7eb8\u7ba1\u7406\u3001\u9053\u5b9d\u5408\u6210 |
+| drop_service | \u6389\u843d\u8868\u67e5\u8be2\u3001\u6982\u7387\u8ba1\u7b97\u3001\u6389\u843d\u53d1\u653e |
+| durability_service | \u8010\u4e45\u6d88\u8017\u3001\u4fee\u7406\u3001\u788e\u88c2\u5904\u7406 |
+| upgrade_service | \u88c5\u5907\u5347\u7ea7\u3001\u6210\u529f\u7387\u8ba1\u7b97\u3001\u5931\u8d25\u5904\u7406 |
+| trade_service | \u4ea4\u6613\u7cfb\u7edf\u3001\u81ea\u7531\u4ea4\u6613 |
+| inherit_service | \u795e\u4f4d\u7ee7\u627f\u3001\u795e\u8bdd\u788e\u7247\u7ba1\u7406\u3001\u5927\u9053\u4e89\u950b\u6389\u843d |
+
+## 三、数据库设计
+### 3.1 核心表
+
+| \u8868\u540d | \u5b57\u6bb5 | \u8bf4\u660e |
+| equipment_template | id, quality, slot_type, weapon_type, base_value, level, extra_attr_count | \u88c5\u5907\u6a21\u677f\u8868 |
+| equipment_instance | id, template_id, owner_id, quality, slot_type, level, durability, base_attr\u5206\u914dJSON, extra_attrs JSON, is_equipped, created_at | \u88c5\u5907\u5b9e\u4f8b\u8868 |
+| equipment_extra_attr | id, equipment_id, attr_type, attr_value, attr_category | \u9644\u52a0\u5c5e\u6027\u8868 |
+| craft_level | player_id, level(\u5b66\u5f92/\u5320\u4eba/\u5de7\u5320/\u5927\u5e08/\u5b97\u5e08), success_count_by_quality JSON | \u6253\u9020\u54c1\u7ea7\u8868 |
+| craft_recipe | id, quality, required_level, materials JSON, gold_cost, success_rate | \u6253\u9020\u56fe\u7eb8\u8868 |
+| drop_table | id, monster_type, quality, base_rate, luck_factor | \u6389\u843d\u6982\u7387\u8868 |
+| set_bonus | id, player_id, quality, float_value, float_attr, is_active | \u5957\u88c5\u6548\u679c\u8868 |
+| player_inventory | id, player_id, slot_index, equipment_id | \u73a9\u5bb6\u80cc\u5305\u8868 |
+| player_warehouse | id, player_id, slot_index, equipment_id, is_rented | \u4ed3\u5e93\u8868 |
+| myth_shard | id, owner_id, count, is_inherited, inherited_skills JSON | \u795e\u8bdd\u788e\u7247\u8868 |
+| inherit_record | id, player_id, shard_id, skill_id, is_active, lost_at | \u795e\u4f4d\u7ee7\u627f\u8bb0\u5f55\u8868 |
+| trade_order | id, seller_id, buyer_id, equipment_id, price, status, created_at | \u4ea4\u6613\u8ba2\u5355\u8868 |
+| repair_log | id, equipment_id, material_used, gold_cost, timestamp | \u4fee\u7406\u65e5\u5fd7 |
+
+### 3.2 分库策略
+主库（player_db）：equipment_instance / player_inventory / player_warehouse / craft_level
+战斗库（combat_db）：drop_table / durability实时状态（Redis）
+配置库（config_db）：equipment_template / craft_recipe / drop_table配置
+日志库（log_db）：repair_log / trade_order / inherit_record
+## 四、装备生成系统
+装备生成在掉落/打造时触发，服务端生成装备实例。
+// Go伪代码
+type EquipmentInstance struct {
+    ID           int64
+    TemplateID   int
+    Quality      Quality  // 凡品/珍品/灵宝/仙宝/神话/道宝/先天灵宝/功德灵宝
+    SlotType     SlotType // 头甲/面甲/.../主武器/副武器
+    WeaponType   WeaponType // 刀/剑/枪/...（仅武器）
+    Level        int      // 1~10
+    Durability   int      // 300
+    BaseAttrDist map[AttrType]float64 // 精气神分配
+    ExtraAttrs   []ExtraAttr
+    IsEquipped   bool
+    OwnerID      int64
+}
+
+func GenerateEquipment(quality Quality, slotType SlotType, level int) *EquipmentInstance {
+    eq := &EquipmentInstance{
+        Quality:    quality,
+        SlotType:   slotType,
+        Level:      level,
+        Durability: 300,
+    }
+    // 1. 基础属性随机分配
+    eq.BaseAttrDist = randomDistributeBase(quality, slotType)
+    // 2. 附加属性生成
+    eq.ExtraAttrs = generateExtraAttrs(quality, level)
+    return eq
+}
+
+func randomDistributeBase(quality Quality, slotType SlotType) map[AttrType]float64 {
+    totalBase := qualityMultiplier(quality) * slotBaseValue(slotType) // 如凡品甲=1*1=1精
+    // 全随机分配到各件（此处生成单件时随机其分得的值）
+    // 甲类8件总和=totalBase，每件随机0~totalBase，最后归一化
+    return map[AttrType]float64{
+        slotAttrType(slotType): rand.Float64() * totalBase, // 简化：单件随机分得
+    }
+}
+## 五、加成计算系统
+### 5.1 总加成计算
+// Go伪代码
+func CalcTotalBonus(playerID int64) PlayerBonus {
+    equipped := equipmentService.GetEquipped(playerID)
+    var total PlayerBonus
+    for _, eq := range equipped {
+        // 基础加成 = 品质倍率 × 基数 × 等级系数
+        levelFactor := 1.0 + float64(eq.Level-1)/9.0
+        baseBonus := qualityMultiplier(eq.Quality) * slotBaseValue(eq.SlotType) * levelFactor
+        total.Add(eq.SlotType.AttrType(), baseBonus)
+
+        // 附加属性加成
+        for _, attr := range eq.ExtraAttrs {
+            attrValue := attr.Value * levelFactor // 附加属性也随等级提升
+            total.AddExtra(attr.Type, attrValue)
+        }
+    }
+    // 套装效果
+    total.AddSetBonus(calcSetBonus(equipped))
+    return total
+}
+### 5.2 套装效果计算
+// Go伪代码
+func CalcSetBonus(equipped []EquipmentInstance) SetBonus {
+    // 检查8甲+4首饰是否全同品质
+    armorQualities := getQualitiesByCategory(equipped, CATEGORY_ARMOR)
+    accQualities := getQualitiesByCategory(equipped, CATEGORY_ACCESSORY)
+    if !allSame(armorQualities) || !allSame(accQualities) {
+        return SetBonus{} // 无套装
+    }
+    if armorQualities[0] != accQualities[0] {
+        return SetBonus{} // 甲和首饰品质不同
+    }
+    quality := armorQualities[0]
+    // 查询或生成浮动值
+    setBonus := setBonusService.GetOrCreate(playerID, quality)
+    if !setBonus.IsActive {
+        // 穿齐时生成浮动值
+        setBonus.FloatValue = rand.Float64() * 0.8 // 0~80%
+        setBonus.FloatAttr = randomAttrType()       // 随机精/神/气
+        setBonus.IsActive = true
+        setBonusService.Save(setBonus)
+    }
+    baseValue := qualityMultiplier(quality) * 1.0
+    bonusValue := baseValue * setBonus.FloatValue
+    return SetBonus{Attr: setBonus.FloatAttr, Value: bonusValue}
+}
+### 5.3 副武器线性插值
+// Go伪代码
+func SubWeaponBaseValue(count int) float64 {
+    // 凡品基数：1副=1, 5副=3, 8副=5
+    if count <= 1 {
+        return 1.0
+    }
+    if count <= 5 {
+        return 1.0 + float64(count-1)*(3.0-1.0)/(5.0-1.0)
+    }
+    if count <= 8 {
+        return 3.0 + float64(count-5)*(5.0-3.0)/(8.0-5.0)
+    }
+    return 5.0
+}
+## 六、打造系统技术方案
+// Go伪代码
+func Craft(playerID int64, recipeID int, materials []Item) (*CraftResult, error) {
+    recipe := configService.GetRecipe(recipeID)
+    craftLevel := craftService.GetLevel(playerID)
+
+    // 1. 检查打造品级是否满足
+    if craftLevel < recipe.RequiredLevel {
+        return nil, ErrCraftLevelTooLow
+    }
+    // 2. 检查材料
+    if !checkMaterials(materials, recipe.Materials) {
+        return nil, ErrMaterialsNotEnough
+    }
+    // 3. 计算成功率
+    luck := playerService.GetLuck(playerID)
+    successRate := recipe.SuccessRate + luck*0.1
+    if successRate > 1.0 {
+        successRate = 1.0
+    }
+    // 4. 扣除材料
+    inventoryService.RemoveItems(playerID, materials)
+    inventoryService.RemoveGold(playerID, recipe.GoldCost)
+    // 5. 判定
+    if rand.Float64() > successRate {
+        // 失败：材料已消耗
+        return &CraftResult{Success: false}, nil
+    }
+    // 6. 成功：生成装备
+    level := rand.Intn(10) + 1 // 随机1~10级
+    eq := GenerateEquipment(recipe.Quality, recipe.SlotType, level)
+    eq.OwnerID = playerID
+    equipmentService.Save(eq)
+    // 7. 更新打造计数
+    craftService.IncrementSuccessCount(playerID, recipe.Quality)
+    craftService.TryLevelUp(playerID)
+    return &CraftResult{Success: true, Equipment: eq}, nil
+}
+### 6.1 道宝合成
+// Go伪代码
+func CraftDaoBao(playerID int64, xianbaoIDs []int64) (*CraftResult, error) {
+    craftLevel := craftService.GetLevel(playerID)
+    if craftLevel < LEVEL_GRANDMASTER {
+        return nil, ErrCraftLevelTooLow
+    }
+    // 检查是否满级（1000件仙宝）
+    if craftLevel.SuccessCountXianBao < 1000 {
+        return nil, ErrNotFullyLeveled
+    }
+    if len(xianbaoIDs) != 10 {
+        return nil, ErrNeed10XianBao
+    }
+    // 扣除10件仙宝
+    for _, id := range xianbaoIDs {
+        equipmentService.Delete(id)
+    }
+    // 50%成功率
+    luck := playerService.GetLuck(playerID)
+    successRate := 0.5 + luck*0.1
+    if successRate > 1.0 {
+        successRate = 1.0
+    }
+    if rand.Float64() > successRate {
+        // 失败：随机5件粉碎（已删除），5件破损（恢复但耐久降为1）
+        shuffled := shuffle(xianbaoIDs)
+        for i := 0; i < 5; i++ {
+            // 5件已删除（粉碎）
+        }
+        for i := 5; i < 10; i++ {
+            eq := equipmentService.Restore(shuffled[i]) // 恢复
+            eq.Durability = 1
+            equipmentService.Save(eq)
+        }
+        return &CraftResult{Success: false, FailedShattered: 5, FailedBroken: 5}, nil
+    }
+    // 成功：生成道宝
+    level := rand.Intn(10) + 1
+    eq := GenerateEquipment(QUALITY_DAOBAO, SLOT_RANDOM, level)
+    eq.OwnerID = playerID
+    equipmentService.Save(eq)
+    return &CraftResult{Success: true, Equipment: eq}, nil
+}
+## 七、掉落系统技术方案
+// Go伪代码
+type DropRequest struct {
+    PlayerID    int64
+    MonsterType MonsterType // 普通/精英/Boss/妖/神兽
+    MonsterLevel int
+}
+
+func RollDrop(req DropRequest) *DropResult {
+    dropConfig := configService.GetDropTable(req.MonsterType)
+    luck := playerService.GetLuck(req.PlayerID)
+
+    for _, entry := range dropConfig.Entries {
+        // 气运提升概率
+        adjustedRate := entry.BaseRate * (1.0 + luck)
+        if rand.Float64() < adjustedRate {
+            // 掉落该品质装备
+            level := rand.Intn(10) + 1
+            slotType := randomSlotType()
+            if entry.Quality == QUALITY_MYTH {
+                // 神话可能掉落碎片
+                if rand.Float64() < 0.5 {
+                    // 掉落3个碎片
+                    return &DropResult{Shards: 3}
+                }
+            }
+            eq := GenerateEquipment(entry.Quality, slotType, level)
+            return &DropResult{Equipment: eq}
+        }
+    }
+    return &DropResult{} // 无掉落
+}
+### 7.1 野怪掉落配置
+
+| \u602a\u7269\u7c7b\u578b | \u6389\u843d\u54c1\u8d28\u8303\u56f4 | \u6389\u843d\u6b21\u6570 |
+| \u666e\u901a\u602a | \u51e1\u54c193%/\u73cd\u54c15%/\u7075\u5b9d1%/\u4ed9\u5b9d0.5%/\u795e\u8bdd0.35%/\u9053\u5b9d0.1%/\u5148\u5929+\u529f\u5fb70.05% | 1\u6b21 |
+| \u7cbe\u82f1\u602a | \u540c\u4e0a\uff0c\u4f46\u73cd\u54c1\u4ee5\u4e0a\u6982\u7387\u63d0\u5347 | 1~2\u6b21 |
+| Boss\u602a | \u540c\u4e0a\uff0c\u7075\u5b9d\u6982\u7387\u4e2d\u7b49 | 2~3\u6b21 |
+| \u5996 | \u73cd\u54c1+\u7075\u5b9d\u4e3a\u4e3b | 2~3\u6b21 |
+| \u795e\u517d | \u7075\u5b9d~\u4ed9\u5b9d\u4e3a\u4e3b\uff0c\u6781\u4f4e\u6982\u7387\u795e\u8bdd | 3~5\u6b21 |
+
+## 八、耐久与修理技术方案
+// Go伪代码
+// 耐久消耗（每次受击/攻击）
+func OnDurabilityConsume(equipmentID int64, amount int) error {
+    eq := equipmentService.Get(equipmentID)
+    eq.Durability -= amount
+    if eq.Durability <= 10 && eq.Durability > 0 {
+        // 发送警告通知客户端
+        notifyService.Send(eq.OwnerID, "EQUIPMENT_LOW_DURABILITY", eq.ID)
+    }
+    if eq.Durability <= 0 {
+        // 装备碎裂消失
+        equipmentService.Delete(equipmentID)
+        notifyService.Send(eq.OwnerID, "EQUIPMENT_DESTROYED", eq.ID)
+        return ErrEquipmentDestroyed
+    }
+    equipmentService.Save(eq)
+    return nil
+}
+
+// 修理
+func Repair(playerID int64, equipmentID int64, materialID int) error {
+    eq := equipmentService.Get(equipmentID)
+    if eq.Durability >= 300 {
+        return ErrAlreadyFull
+    }
+    material := configService.GetRepairMaterial(eq.Quality)
+    if materialID != material.ID {
+        return ErrWrongMaterial
+    }
+    // 扣除材料和钱
+    inventoryService.RemoveItem(playerID, materialID, 1)
+    inventoryService.RemoveGold(playerID, repairCost(eq))
+    // 恢复耐久
+    eq.Durability = 300
+    equipmentService.Save(eq)
+    return nil
+}
+## 九、装备升级技术方案
+// Go伪代码
+var upgradeRates = map[int]float64{
+    1: 1.0, 2: 0.95, 3: 0.90, 4: 0.80, 5: 0.70,
+    6: 0.60, 7: 0.55, 8: 0.52, 9: 0.50,
+}
+
+var upgradeFailures = map[int]string{
+    2: "DOWNGRADE", 3: "DOWNGRADE", 4: "DOWNGRADE",
+    5: "HALF_DOWN_HALF_DESTROY", 6: "HALF_DOWN_HALF_DESTROY",
+    7: "DESTROY", 8: "DESTROY", 9: "DESTROY",
+}
+
+func Upgrade(playerID int64, equipmentID int64, materials []Item) (*UpgradeResult, error) {
+    eq := equipmentService.Get(equipmentID)
+    if eq.Level >= 10 {
+        return nil, ErrMaxLevel
+    }
+    // 扣除材料和钱
+    inventoryService.RemoveItems(playerID, materials)
+    inventoryService.RemoveGold(playerID, upgradeCost(eq))
+    // 计算成功率
+    luck := playerService.GetLuck(playerID)
+    rate := upgradeRates[eq.Level] + luck*0.1
+    if rate > 1.0 {
+        rate = 1.0
+    }
+    if rand.Float64() <= rate {
+        eq.Level++
+        equipmentService.Save(eq)
+        return &UpgradeResult{Success: true, NewLevel: eq.Level}, nil
+    }
+    // 失败处理
+    failType := upgradeFailures[eq.Level]
+    switch failType {
+    case "DOWNGRADE":
+        if eq.Level > 1 {
+            eq.Level--
+        }
+    case "HALF_DOWN_HALF_DESTROY":
+        if rand.Float64() < 0.5 {
+            if eq.Level > 1 { eq.Level-- }
+        } else {
+            equipmentService.Delete(equipmentID)
+            return &UpgradeResult{Success: false, Destroyed: true}, nil
+        }
+    case "DESTROY":
+        equipmentService.Delete(equipmentID)
+        return &UpgradeResult{Success: false, Destroyed: true}, nil
+    }
+    equipmentService.Save(eq)
+    return &UpgradeResult{Success: false, Downgraded: true, NewLevel: eq.Level}, nil
+}
+## 十、神话碎片与神位继承技术方案
+### 10.1 碎片合成
+// Go伪代码
+func CombineShards(playerID int64) (*EquipmentInstance, error) {
+    shards := mythShardService.GetByOwner(playerID)
+    if len(shards) < 3 {
+        return nil, ErrNotEnoughShards
+    }
+    // 扣除3个碎片
+    mythShardService.Remove(playerID, 3)
+    // 生成完整神话装备
+    level := rand.Intn(10) + 1
+    slotType := randomSlotType()
+    eq := GenerateEquipment(QUALITY_MYTH, slotType, level)
+    eq.OwnerID = playerID
+    equipmentService.Save(eq)
+    return eq, nil
+}
+### 10.2 神位继承
+// Go伪代码
+func ActivateInherit(playerID int64, shardID int64, skillID int) error {
+    shard := mythShardService.Get(shardID)
+    if shard.OwnerID != playerID {
+        return ErrNotOwner
+    }
+    // 绑定人物
+    shard.IsInherited = true
+    shard.InheritedSkills = append(shard.InheritedSkills, skillID)
+    mythShardService.Save(shard)
+    // 激活技能
+    skillService.Activate(playerID, skillID)
+    return nil
+}
+
+// 大道争锋掉落
+func OnDuelLost(loserID, winnerID int64) {
+    shards := mythShardService.GetByOwner(loserID)
+    for _, shard := range shards {
+        if shard.IsInherited {
+            // 转移碎片
+            mythShardService.Transfer(shard.ID, loserID, winnerID)
+            // 技能灰化
+            for _, skillID := range shard.InheritedSkills {
+                skillService.Deactivate(loserID, skillID)
+            }
+            shard.IsInherited = false
+            mythShardService.Save(shard)
+        }
+    }
+}
+## 十一、背包与仓库技术方案
+// Go伪代码
+type Inventory struct {
+    PlayerID  int64
+    Slots     []InventorySlot // 基础20格 + 腰带扩展
+    MaxSlots  int
+}
+
+type Warehouse struct {
+    PlayerID  int64
+    Slots     []InventorySlot
+    IsRented  bool
+    HouseID   int64 // 关联房产
+}
+
+func GetInventoryCapacity(playerID int64) int {
+    base := 20
+    belt := equipmentService.GetEquippedBySlot(playerID, SLOT_BELT)
+    if belt != nil {
+        return base + beltExtraSlots(belt.Quality)
+    }
+    return base
+}
+
+func beltExtraSlots(quality Quality) int {
+    switch quality {
+    case QUALITY_FAN:    return 2
+    case QUALITY_ZHEN:   return 4
+    case QUALITY_LING:   return 6
+    case QUALITY_XIAN:   return 8
+    case QUALITY_MYTH:   return 10
+    case QUALITY_DAO:    return 12
+    case QUALITY_INNATE: return 16
+    }
+    return 0
+}
+## 十二、交易系统技术方案
+// Go伪代码
+type TradeOrder struct {
+    ID          int64
+    SellerID    int64
+    BuyerID     int64
+    EquipmentID int64
+    Price       int64
+    Status      string // PENDING/COMPLETED/CANCELLED
+    CreatedAt   time.Time
+}
+
+func CreateTrade(sellerID int64, equipmentID int64, price int64) (*TradeOrder, error) {
+    eq := equipmentService.Get(equipmentID)
+    if eq.OwnerID != sellerID {
+        return nil, ErrNotOwner
+    }
+    // 装备不绑定，可直接交易
+    order := &TradeOrder{
+        SellerID: sellerID, EquipmentID: equipmentID,
+        Price: price, Status: "PENDING",
+    }
+    tradeService.Save(order)
+    return order, nil
+}
+
+func ExecuteTrade(orderID int64, buyerID int64) error {
+    order := tradeService.Get(orderID)
+    // 扣除买家金币
+    inventoryService.RemoveGold(buyerID, order.Price)
+    // 转移装备
+    eq := equipmentService.Get(order.EquipmentID)
+    eq.OwnerID = buyerID
+    if eq.IsEquipped {
+        // 如果装备正在穿戴，先卸下
+        equipmentService.Unequip(order.SellerID, eq.ID)
+    }
+    equipmentService.Save(eq)
+    // 增加卖家金币
+    inventoryService.AddGold(order.SellerID, order.Price)
+    order.Status = "COMPLETED"
+    tradeService.Save(order)
+    return nil
+}
+## 十三、性能指标
+
+| \u6307\u6807 | \u76ee\u6807 |
+| \u88c5\u5907\u52a0\u6210\u8ba1\u7b97\u5ef6\u8fdf | P99 < 10ms |
+| \u6253\u9020\u8bf7\u6c42\u5ef6\u8fdf | P99 < 200ms |
+| \u6389\u843d\u8ba1\u7b97\u5ef6\u8fdf | P99 < 50ms |
+| \u4fee\u7406\u8bf7\u6c42\u5ef6\u8fdf | P99 < 100ms |
+| \u5347\u7ea7\u8bf7\u6c42\u5ef6\u8fdf | P99 < 200ms |
+| \u4ea4\u6613\u8bf7\u6c42\u5ef6\u8fdf | P99 < 500ms |
+| \u80cc\u5305\u64cd\u4f5c\u5ef6\u8fdf | P99 < 50ms |
+| \u88c5\u5907\u5b9e\u4f8b\u5b58\u50a8 | \u5355\u73a9\u5bb6\u4e0a\u96501000\u4ef6 |
+| \u6389\u843d\u8868\u67e5\u8be2\u7f13\u5b58\u547d\u4e2d\u7387 | > 95% |
+
+## 十四、安全与反作弊
+服务端权威：所有装备生成、加成计算、升级判定在服务端完成
+随机数安全：服务端生成，客户端无法预测
+交易校验：服务端验证装备所有权和交易合法性
+耐久校验：服务端记录每次耐久消耗，防止客户端篡改
+打造次数校验：服务端记录打造次数，防止刷品级
+碎片唯一性：神话碎片使用Redis分布式锁保障唯一性
+继承绑定：神位继承绑定人物，不可通过交易转移
+## 十五、Protobuf帧定义
+message EquipmentInfo {
+  int64 id = 1;
+  int32 quality = 2;
+  int32 slot_type = 3;
+  int32 weapon_type = 4;
+  int32 level = 5;
+  int32 durability = 6;
+  map<string, float> base_attrs = 7;
+  repeated ExtraAttr extra_attrs = 8;
+  bool is_equipped = 9;
+}
+
+message ExtraAttr {
+  int32 type = 1;
+  float value = 2;
+  int32 category = 3;
+}
+
+message EquipRequest {
+  int64 player_id = 1;
+  int64 equipment_id = 2;
+}
+
+message CraftRequest {
+  int64 player_id = 1;
+  int32 recipe_id = 2;
+  repeated int64 material_ids = 3;
+}
+
+message UpgradeRequest {
+  int64 player_id = 1;
+  int64 equipment_id = 2;
+  repeated int64 material_ids = 3;
+}
+
+message DropResult {
+  EquipmentInfo equipment = 1;
+  int32 shard_count = 2;
+}
+
+message SetBonusInfo {
+  int32 quality = 1;
+  float float_value = 2;
+  int32 float_attr = 3;
+  bool is_active = 4;
+}
+## 十六、后续扩展规划
+装备分解系统：分解产出材料，品质越高产出越多
+装备强化系统：独立于升级的额外强化路线
+装备洗练系统：重新随机附加属性
+先天灵宝特殊机制：后期补充
+功德灵宝特殊机制：前期不出，后期补充
+8副武器解锁条件：特殊人物途径解锁
+神位继承详细设计：大道争锋、技能继承完整方案
+房产系统：与仓库关联的房屋购买和装修

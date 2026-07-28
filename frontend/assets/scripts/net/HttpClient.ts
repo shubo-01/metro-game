@@ -32,6 +32,14 @@ export class HttpClient {
      * - /death/*         → 死亡服务（端口 8006）
      * - /dungeon/*       → 副本服务（端口 8007）花果山副本
      * - /fatigue/*       → 副本服务（端口 8007）牢结值系统
+     * - /monster/*       → 野怪服务（端口 8008）初始之地野怪系统
+     * - /capture/*       → 野怪服务（端口 8008）抓捕系统
+     * - /equipment/*     → 装备服务（端口 8009）装备穿戴/升级/耐久/掉落
+     * - /craft/*         → 装备服务（端口 8009）打造系统
+     * - /shard/*         → 装备服务（端口 8009）神话碎片合成
+     * - /inherit/*       → 装备服务（端口 8009）神位继承
+     * - /trade/*         → 装备服务（端口 8009）交易系统
+     * - /inventory/*     → 装备服务（端口 8009）背包容量（腰带扩展）
      * - 其他              → 默认认证服务（端口 8001）
      */
     private static _getServiceBaseUrl(path: string): string {
@@ -43,6 +51,14 @@ export class HttpClient {
         }
         if (path.startsWith('/dungeon/') || path.startsWith('/fatigue/')) {
             return ServerConfig.DEV_DUNGEON_URL;
+        }
+        if (path.startsWith('/monster/') || path.startsWith('/capture/')) {
+            return ServerConfig.DEV_MONSTER_URL;
+        }
+        if (path.startsWith('/equipment/') || path.startsWith('/craft/')
+            || path.startsWith('/shard/') || path.startsWith('/inherit/')
+            || path.startsWith('/trade/') || path.startsWith('/inventory/')) {
+            return ServerConfig.DEV_EQUIPMENT_URL;
         }
         return HttpClient._baseUrl;
     }

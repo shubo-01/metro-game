@@ -1,0 +1,17 @@
+# 野怪服务配置（初始之地野怪系统）
+# 严格按照《寻仙 - 初始之地野怪系统 PRD+技术方案》实现
+server:
+  port: 8008
+  name: monster-service
+
+mysql:
+  # 领地/族群/怪物实体/神兽/妖幼崽/抓捕日志均在 game_main 库
+  dsn: "root:password@tcp(127.0.0.1:3306)/game_main?charset=utf8mb4&parseTime=true&loc=Local"
+  max_open_conns: 50
+  max_idle_conns: 10
+
+redis:
+  # 用于：妖幼崽刷新CD（yao_cub:respawn:{faction_id}）、神兽幼崽唯一性分布式锁（divine_cub:capture:{group}）
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0

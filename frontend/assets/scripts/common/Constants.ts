@@ -14,6 +14,10 @@ export const ServerConfig = {
     DEATH_BASE_URL: 'https://api.xunxian.game',
     /** 副本服务地址（生产环境通过网关路由，此处备用） */
     DUNGEON_BASE_URL: 'https://api.xunxian.game',
+    /** 野怪服务地址（生产环境通过网关路由，此处备用） */
+    MONSTER_BASE_URL: 'https://api.xunxian.game',
+    /** 装备服务地址（生产环境通过网关路由，此处备用） */
+    EQUIPMENT_BASE_URL: 'https://api.xunxian.game',
     /** WebSocket 地址 */
     WS_URL: 'wss://ws.xunxian.game',
 
@@ -26,6 +30,10 @@ export const ServerConfig = {
     DEV_DEATH_URL: 'http://127.0.0.1:8006',
     /** 副本服务（dungeon-service）端口 8007 —— 花果山副本 + 牢结值系统 */
     DEV_DUNGEON_URL: 'http://127.0.0.1:8007',
+    /** 野怪服务（monster-service）端口 8008 —— 初始之地野怪系统（领地/族群/协战/抓捕） */
+    DEV_MONSTER_URL: 'http://127.0.0.1:8008',
+    /** 装备服务（equipment-service）端口 8009 —— 装备系统（穿戴/升级/打造/掉落/交易） */
+    DEV_EQUIPMENT_URL: 'http://127.0.0.1:8009',
     /** 开发环境 WebSocket 地址 */
     DEV_WS_URL: 'ws://127.0.0.1:8004/ws',
 };

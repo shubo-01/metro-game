@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"xunxian/internal/middleware"
 	"xunxian/internal/character"
 	"xunxian/internal/config"
 	"xunxian/internal/database"
@@ -61,7 +62,7 @@ func main() {
 
 	// 启动服务
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 
 	go func() {
 		log.Printf("[character-service] 启动于 %s", addr)

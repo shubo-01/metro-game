@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"xunxian/internal/middleware"
 	"xunxian/internal/config"
 	"xunxian/internal/redis"
 	"xunxian/internal/session"
@@ -38,7 +39,7 @@ func main() {
 	mux.HandleFunc("/ws", gw.HandleWebSocket)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadTimeout: 0, WriteTimeout: 0}
+	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 0, WriteTimeout: 0}
 
 	go func() {
 		log.Printf("[session-service] WebSocket 启动于 %s", addr)
