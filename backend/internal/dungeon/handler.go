@@ -325,6 +325,12 @@ func (s *Service) HandleSettle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── 步骤7.5：神位系统追加掉落（实现见 shenwei_drop.go）──
+	// 碎片/凡品神位/自由属性点/归元符，通过 /shenwei/grant 内部接口发放，
+	// 发放失败只记日志不阻断结算；掉落条目一并追进 rewards 写入 reward_json
+	shenweiDrops := s.grantShenweiDrops(req.SessionID, req.PlayerID, roleType, outcome, luckSnap)
+	rewards = append(rewards, shenweiDrops...)
+
 	// ── 步骤8：写回会话记录（结算完成） ──
 	rewardJSON, _ := json.Marshal(rewards)
 	_, err = s.db.Exec(

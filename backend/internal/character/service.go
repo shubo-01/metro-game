@@ -122,9 +122,15 @@ type Execer interface {
 }
 
 func recalcAndSaveDerived(e Execer, characterID int64) (DerivedAttrs, error) {
-	// 1. 读出当前精气神
+	// 1. 读出当前“有效精气神” = 裸值(固定点+自由点) + 神位加成 shenwei_* 三列。
+	//    COALESCE 兼容旧数据：v3 迁移前建的行 shenwei_* 可能为 NULL，按 0 处理。
+	//    注意：洗点/加点只动 free_* 和 jing/qi/shen 裸值，不碰 shenwei_* 列，
+	//    神位加成由 shenwei 包在继承/切换时快照式覆盖写入，两者互不干扰。
 	var jing, qi, shen int
-	if err := e.QueryRow("SELECT jing, qi, shen FROM character_attributes WHERE character_id=?", characterID).
+	if err := e.QueryRow(`SELECT jing + COALESCE(shenwei_jing, 0),
+		       qi + COALESCE(shenwei_qi, 0),
+		       shen + COALESCE(shenwei_shen, 0)
+		FROM character_attributes WHERE character_id=?`, characterID).
 		Scan(&jing, &qi, &shen); err != nil {
 		return DerivedAttrs{}, err
 	}
@@ -323,9 +329,20 @@ func (s *Service) HandleInfo(w http.ResponseWriter, r *http.Request) {
 		SoulMax int `json:"soul_max"`     // 魂力上限
 		SoulCur int `json:"soul_current"` // 当前魂力
 	}
-	err = s.db.QueryRow("SELECT jing, qi, shen, qi_yun, wu_xing, hp_max, hp_current, mp_max, mp_current, soul_max, soul_current FROM character_attributes WHERE character_id=?", charID).
+	// 两种口径说明：
+	//   基础值（裸值）= jing/qi/shen 列本身（固定点+自由点），attributes 字段返回裸值，
+	//     前端继承门槛预检（神位继承要求按裸值判定，防加成套娃）必须用它；
+	//   有效值 = 裸值 + 神位加成 shenwei_*（COALESCE 兼容 v3 迁移前的 NULL 旧行），
+	//     衍生属性（hp_max 等）按有效值计算，与 recalcAndSaveDerived 落库口径一致，
+	//     否则同一响应里 attributes.hp_max（含加成）与 derived.hp_max（不含）会互相矛盾。
+	var effJing, effQi, effShen int
+	err = s.db.QueryRow(`SELECT jing, qi, shen, qi_yun, wu_xing,
+			hp_max, hp_current, mp_max, mp_current, soul_max, soul_current,
+			jing + COALESCE(shenwei_jing, 0), qi + COALESCE(shenwei_qi, 0), shen + COALESCE(shenwei_shen, 0)
+		FROM character_attributes WHERE character_id=?`, charID).
 		Scan(&attrs.Jing, &attrs.Qi, &attrs.Shen, &attrs.QiYun, &attrs.WuXing,
-			&attrs.HPMax, &attrs.HPCur, &attrs.MPMax, &attrs.MPCur, &attrs.SoulMax, &attrs.SoulCur)
+			&attrs.HPMax, &attrs.HPCur, &attrs.MPMax, &attrs.MPCur, &attrs.SoulMax, &attrs.SoulCur,
+			&effJing, &effQi, &effShen)
 	if err != nil {
 		writeJSON(w, 500, APIResponse{Code: 500, Msg: "角色属性数据缺失"})
 		return
@@ -363,8 +380,8 @@ func (s *Service) HandleInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	// 计算衍生属性
-	derived := CalcDerivedAttrs(attrs.Jing, attrs.Qi, attrs.Shen)
+	// 计算衍生属性：输入用有效精气神（裸值+神位加成），与落库口径保持一致
+	derived := CalcDerivedAttrs(effJing, effQi, effShen)
 	elementCount := len(qiElements)
 	if elementCount == 0 {
 		elementCount = 1
@@ -401,18 +418,28 @@ func (s *Service) HandleAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 两种口径说明（与 HandleInfo 一致）：
+	//   base_attrs 返回【裸值】jing/qi/shen —— 前端神位继承门槛预检要按裸值判定，不能给加成污染；
+	//   derived 按【有效值】= 裸值 + COALESCE(shenwei_*, 0) 计算 —— 与 recalcAndSaveDerived
+	//   落库的 current.hp_max 等口径对齐，避免同一响应中 current 含加成而 derived 不含的矛盾。
 	var jing, qi, shen, qiYun, wuXing int
 	var hpMax, hpCur, mpMax, mpCur, soulMax, soulCur int
+	var effJing, effQi, effShen int
 	err := s.db.QueryRow(
-		"SELECT jing, qi, shen, qi_yun, wu_xing, hp_max, hp_current, mp_max, mp_current, soul_max, soul_current FROM character_attributes WHERE character_id=?",
+		`SELECT jing, qi, shen, qi_yun, wu_xing,
+			hp_max, hp_current, mp_max, mp_current, soul_max, soul_current,
+			jing + COALESCE(shenwei_jing, 0), qi + COALESCE(shenwei_qi, 0), shen + COALESCE(shenwei_shen, 0)
+		FROM character_attributes WHERE character_id=?`,
 		charID,
-	).Scan(&jing, &qi, &shen, &qiYun, &wuXing, &hpMax, &hpCur, &mpMax, &mpCur, &soulMax, &soulCur)
+	).Scan(&jing, &qi, &shen, &qiYun, &wuXing, &hpMax, &hpCur, &mpMax, &mpCur, &soulMax, &soulCur,
+		&effJing, &effQi, &effShen)
 	if err != nil {
 		writeJSON(w, 404, APIResponse{Code: 404, Msg: "角色属性不存在"})
 		return
 	}
 
-	derived := CalcDerivedAttrs(jing, qi, shen)
+	// 衍生属性按有效精气神现算（裸值口径见上方注释）
+	derived := CalcDerivedAttrs(effJing, effQi, effShen)
 
 	writeJSON(w, 200, APIResponse{
 		Code: 0,
