@@ -69,6 +69,7 @@ declare module 'cc' {
         emit(type: string, ...args: any[]): void;
         getChildByName(name: string): Node | null;
         getComponent<T>(classConstructor: new (...args: any[]) => T): T | null;
+        getComponentInChildren<T>(classConstructor: new (...args: any[]) => T): T | null;
         addComponent<T>(classConstructor: new (...args: any[]) => T): T;
         destroy(): boolean;
         removeFromParent(): void;

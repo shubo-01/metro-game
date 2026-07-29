@@ -1,11 +1,14 @@
 /**
  * 寻仙 - 角色面板 UI
  * 功能：五维属性展示、衍生属性列表、境界进度条、五行修炼列表
- * 数据源：GET /character/attributes + GET /character/qi/elements
+ *       V2 新增：护盾/五行亲和/反应/异常抵抗/均衡状态展示，加点/洗点入口
+ * 数据源：GET /character/attributes + GET /character/qi/elements + GET /character/shield
  */
 
 import { _decorator, Component, Label, Node, Color, ScrollView } from 'cc';
 import { HttpClient } from '../net/HttpClient';
+import { CharacterApi, CharacterV2Event } from '../net/CharacterApi';
+import { EventManager } from '../manager/EventManager';
 import { PlayerManager } from '../manager/PlayerManager';
 
 const { ccclass, property } = _decorator;
@@ -53,6 +56,17 @@ export class CharacterPanel extends Component {
     // ─── 多修倍率信息 ───
     @property(Label) multiplierInfoLabel: Label | null = null;
 
+    // ─── V2 衍生值标签 ───
+    @property(Label) shieldLabel: Label | null = null;          // 护盾 当前/上限
+    @property(Label) affinityLabel: Label | null = null;        // 五行亲和
+    @property(Label) reactionLabel: Label | null = null;        // 反应（打断抗性）
+    @property(Label) abnormalResistLabel: Label | null = null;  // 异常抵抗值
+    @property(Label) equilibriumLabel: Label | null = null;     // 均衡状态（×2生效/×1偏科）
+
+    // ─── V2 加点/洗点入口按钮 ───
+    @property(Node) allocateBtn: Node | null = null;   // "加点"按钮（emit OPEN_ALLOCATE 打开加点面板）
+    @property(Node) washBtn: Node | null = null;       // "洗点"按钮（emit OPEN_WASH 打开洗点确认框）
+
     // ─── Toast ───
     @property(Label) toastLabel: Label | null = null;
 
@@ -61,12 +75,33 @@ export class CharacterPanel extends Component {
 
     onLoad() {
         this._characterId = this._playerManager.playerId;
+
+        // 加点/洗点入口：项目规范要求跨面板动作走 EventManager，由对应面板监听打开
+        this.allocateBtn?.on(Node.EventType.TOUCH_END, () => {
+            EventManager.emit(CharacterV2Event.OPEN_ALLOCATE);
+        }, this);
+        this.washBtn?.on(Node.EventType.TOUCH_END, () => {
+            EventManager.emit(CharacterV2Event.OPEN_WASH);
+        }, this);
+
+        // 加点/洗点成功后刷新面板数据
+        EventManager.on(CharacterV2Event.ATTR_UPDATED, this._onAttrUpdated, this);
+
+        this.refreshAll();
+    }
+
+    onDestroy() {
+        EventManager.offAll(this);
+    }
+
+    /** 属性变化事件（加点/洗点成功后广播）：重新拉取全部数据 */
+    private _onAttrUpdated() {
         this.refreshAll();
     }
 
     /** 刷新所有数据 */
     public async refreshAll() {
-        await Promise.all([this._loadAttributes(), this._loadQiElements(), this._loadRealm()]);
+        await Promise.all([this._loadAttributes(), this._loadQiElements(), this._loadRealm(), this._loadShield()]);
     }
 
     /** 加载五维属性及衍生值 */
@@ -96,7 +131,29 @@ export class CharacterPanel extends Component {
             if (this.agilityLabel) this.agilityLabel.string = `身法: ${derived.agility}`;
             if (this.skillPowerLabel) this.skillPowerLabel.string = `功法威力: ${derived.skill_power}`;
             if (this.senseRangeLabel) this.senseRangeLabel.string = `神识范围: ${derived.sense_range}`;
+
+            // V2 衍生值
+            if (this.affinityLabel) this.affinityLabel.string = `五行亲和: ${derived.affinity}`;
+            if (this.reactionLabel) this.reactionLabel.string = `反应: ${derived.reaction}`;
+            if (this.abnormalResistLabel) this.abnormalResistLabel.string = `异常抵抗: ${derived.abnormal_resist}`;
+            if (this.equilibriumLabel) {
+                // 均衡加成：max÷min≤3 时后端返回2，否则返回1
+                const balanced = derived.equilibrium >= 2;
+                this.equilibriumLabel.string = balanced ? '均衡加成 ×2' : '偏科Build ×1';
+                this.equilibriumLabel.color = new Color().fromHEX(balanced ? '#2ECC71' : '#8A8A9A');
+            }
         } catch { this._showToast('加载属性失败'); }
+    }
+
+    /** 加载护盾状态（V2：护盾当前值/上限单独接口查询） */
+    private async _loadShield() {
+        try {
+            const res = await CharacterApi.getShield(this._characterId);
+            if (res.code !== 0 || !res.data) return;
+            if (this.shieldLabel) {
+                this.shieldLabel.string = `护盾: ${res.data.shield_current}/${res.data.shield_max}`;
+            }
+        } catch { /* 静默 */ }
     }
 
     /** 加载五行修炼信息 */
