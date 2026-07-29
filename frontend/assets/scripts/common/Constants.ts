@@ -122,3 +122,23 @@ export enum ChatChannel {
     Guild = 2,
     Private = 3,
 }
+
+/**
+ * 神位系统事件（花果山神位继承系统，character-service 8005 /shenwei/ 接口）
+ * 生产者/消费者配对（勿新增只监听无生产者的事件）：
+ *   - 生产者统一为 ShenweiApi 封装层：接口成功（code===0 且有 data）后自动 emit 并携带响应 data
+ *   - 消费者为 ShenweiPanel：SHENWEI_UPDATED 用响应数据渲染面板，
+ *     四个写操作事件负责结果 toast 并触发重新拉取 info
+ */
+export enum ShenweiEvent {
+    /** 神位总览数据已刷新（getInfo 成功后广播，携带 ShenweiInfo 全量数据） */
+    SHENWEI_UPDATED = 'shenwei:updated',
+    /** 碎片合成成功（synthesize 成功后广播，携带 SynthesizeData） */
+    SHENWEI_SYNTHESIZED = 'shenwei:synthesized',
+    /** 神位融合成功（fuse 成功后广播，携带 FuseData） */
+    SHENWEI_FUSED = 'shenwei:fused',
+    /** 神位继承成功（inherit 成功后广播，携带 InheritData） */
+    SHENWEI_INHERITED = 'shenwei:inherited',
+    /** 神位切换成功（switchTo 成功后广播，携带 SwitchData，含是否晋升免费） */
+    SHENWEI_SWITCHED = 'shenwei:switched',
+}

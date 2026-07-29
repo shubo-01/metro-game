@@ -30,6 +30,9 @@ export class HttpClient {
      * 根据请求路径前缀自动选择对应微服务地址
      * - /character/*     → 角色服务（端口 8005）
      * - /combat/*        → 角色服务（端口 8005）V2战斗结算（技能伤害/异常状态/护盾恢复）
+     * - /shenwei/*       → 角色服务（端口 8005）花果山神位系统（碎片合成/融合/继承/切换）
+     *                      注意：与下方 /shard/ /inherit/（装备服务 8009 的旧神话碎片/神位继承体系）
+     *                      是完全独立的两套体系，互不引用、互不影响
      * - /death/*         → 死亡服务（端口 8006）
      * - /dungeon/*       → 副本服务（端口 8007）花果山副本
      * - /fatigue/*       → 副本服务（端口 8007）牢结值系统
@@ -37,14 +40,16 @@ export class HttpClient {
      * - /capture/*       → 野怪服务（端口 8008）抓捕系统
      * - /equipment/*     → 装备服务（端口 8009）装备穿戴/升级/耐久/掉落
      * - /craft/*         → 装备服务（端口 8009）打造系统
-     * - /shard/*         → 装备服务（端口 8009）神话碎片合成
-     * - /inherit/*       → 装备服务（端口 8009）神位继承
+     * - /shard/*         → 装备服务（端口 8009）神话碎片合成（旧体系，与 /shenwei/ 无关）
+     * - /inherit/*       → 装备服务（端口 8009）神位继承（旧体系，与 /shenwei/ 无关）
      * - /trade/*         → 装备服务（端口 8009）交易系统
      * - /inventory/*     → 装备服务（端口 8009）背包容量（腰带扩展）
      * - 其他              → 默认认证服务（端口 8001）
      */
     private static _getServiceBaseUrl(path: string): string {
-        if (path.startsWith('/character/') || path.startsWith('/combat/')) {
+        // 花果山神位系统 /shenwei/ 与角色/战斗接口同属 character-service 8005；
+        // 旧体系的 /shard/ /inherit/ 属装备服务 8009（见下），两套体系独立互不影响
+        if (path.startsWith('/character/') || path.startsWith('/combat/') || path.startsWith('/shenwei/')) {
             return ServerConfig.DEV_CHARACTER_URL;
         }
         if (path.startsWith('/death/')) {

@@ -57,6 +57,8 @@ declare module 'cc' {
     export class Node {
         name: string;
         active: boolean;
+        /** 节点是否有效（未被销毁），继承自 CCObject；销毁后访问节点前应先判断 */
+        readonly isValid: boolean;
         position: Vec3;
         scale: Vec3;
         parent: Node | null;
