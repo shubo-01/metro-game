@@ -33,9 +33,14 @@ export class HttpClient {
      * - /shenwei/*       → 角色服务（端口 8005）花果山神位系统（碎片合成/融合/继承/切换）
      *                      注意：与下方 /shard/ /inherit/（装备服务 8009 的旧神话碎片/神位继承体系）
      *                      是完全独立的两套体系，互不引用、互不影响
+     * - /gongfa/*        → 角色服务（端口 8005）功法系统（学习/遗忘/总览/打坐/杀怪经验）
+     *                      注意：/gongfa/meditate/* 是"功法修炼打坐"（产出精气神经验，结算制），
+     *                      与下方 /fatigue/*（副本服务 8007 的牢结值打坐）是两套独立体系
+     * - /skill/*         → 角色服务（端口 8005）技能系统（碎片合成学习/遗忘/总览/装配卸下）
+     *                      注意：后端与 /gongfa/ 同属 gongfa 包，共用 5xxx 业务错误码
      * - /death/*         → 死亡服务（端口 8006）
      * - /dungeon/*       → 副本服务（端口 8007）花果山副本
-     * - /fatigue/*       → 副本服务（端口 8007）牢结值系统
+     * - /fatigue/*       → 副本服务（端口 8007）牢结值系统（含牢结值打坐，与 /gongfa/meditate/ 无关）
      * - /monster/*       → 野怪服务（端口 8008）初始之地野怪系统
      * - /capture/*       → 野怪服务（端口 8008）抓捕系统
      * - /equipment/*     → 装备服务（端口 8009）装备穿戴/升级/耐久/掉落
@@ -47,9 +52,11 @@ export class HttpClient {
      * - 其他              → 默认认证服务（端口 8001）
      */
     private static _getServiceBaseUrl(path: string): string {
-        // 花果山神位系统 /shenwei/ 与角色/战斗接口同属 character-service 8005；
-        // 旧体系的 /shard/ /inherit/ 属装备服务 8009（见下），两套体系独立互不影响
-        if (path.startsWith('/character/') || path.startsWith('/combat/') || path.startsWith('/shenwei/')) {
+        // 花果山神位系统 /shenwei/、功法系统 /gongfa/、技能系统 /skill/ 都与角色/战斗接口
+        // 同属 character-service 8005；旧体系的 /shard/ /inherit/ 属装备服务 8009（见下），
+        // 功法打坐 /gongfa/meditate/ 与牢结值打坐 /fatigue/meditate/（8007）也是两套独立体系
+        if (path.startsWith('/character/') || path.startsWith('/combat/') || path.startsWith('/shenwei/')
+            || path.startsWith('/gongfa/') || path.startsWith('/skill/')) {
             return ServerConfig.DEV_CHARACTER_URL;
         }
         if (path.startsWith('/death/')) {

@@ -142,3 +142,35 @@ export enum ShenweiEvent {
     /** 神位切换成功（switchTo 成功后广播，携带 SwitchData，含是否晋升免费） */
     SHENWEI_SWITCHED = 'shenwei:switched',
 }
+
+/**
+ * 功法系统事件（生产者：GongfaApi 封装层；消费者：GongfaPanel）
+ * 命名前缀 gongfa: 与 charv2: / shenwei: / skill: 均不冲突。
+ * 【配对约定】每个事件都必须既有生产者又有消费者，禁止只监听不广播（或反之）。
+ * 说明：杀怪经验入账（/gongfa/exp/kill）由战斗流程调用、面板不订阅，
+ * 故不设事件，调用方成功后自行调用 GongfaApi.list() 刷新。
+ */
+export enum GongfaEvent {
+    /** 功法总览数据已刷新（list 成功后广播，携带 GongfaListData 全量数据） */
+    GONGFA_UPDATED = 'gongfa:updated',
+    /** 学习功法成功（learn 成功后广播，携带 LearnData，含是否触发走火入魔） */
+    GONGFA_LEARNED = 'gongfa:learned',
+    /** 遗忘功法成功（forget 成功后广播，携带 ForgetData，含实际扣费明细） */
+    GONGFA_FORGOTTEN = 'gongfa:forgotten',
+    /** 打坐状态变化（meditateStart/Settle/End 成功后广播，携带 MeditateData） */
+    GONGFA_MEDITATION = 'gongfa:meditation',
+}
+
+/**
+ * 技能系统事件（生产者：SkillApi 封装层；消费者：SkillPanel）
+ * 说明：遗忘技能（/skill/forget）的结果与总览是同一份数据视图，
+ * 不单独设事件，面板在成功后调用 SkillApi.list() 刷新（会广播 SKILL_UPDATED）。
+ */
+export enum SkillEvent {
+    /** 技能总览数据已刷新（list 成功后广播，携带 SkillListData 全量数据） */
+    SKILL_UPDATED = 'skill:updated',
+    /** 学习技能成功（learn 成功后广播，携带 SkillLearnData） */
+    SKILL_LEARNED = 'skill:learned',
+    /** 技能栏装配/卸下成功（slotSet 成功后广播，携带 SlotSetData，skill_id=0 表示卸下） */
+    SKILL_SLOT_CHANGED = 'skill:slot_changed',
+}
