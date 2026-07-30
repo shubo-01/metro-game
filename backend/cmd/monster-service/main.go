@@ -64,6 +64,7 @@ func main() {
 	mux.HandleFunc("/monster/faction", svc.HandleFaction)            // 族群信息（?territory_id=）
 	mux.HandleFunc("/monster/list", svc.HandleMonsterList)           // 怪物实体列表（?faction_id=，含懒刷新）
 	mux.HandleFunc("/monster/divine/status", svc.HandleDivineStatus) // 全服20只神兽状态
+	mux.HandleFunc("/monster/ehp", svc.HandleEhp)                    // EHP查表（功法系统，见 internal/monster/ehp.go）
 
 	// 战斗/协战接口（服务端权威）
 	mux.HandleFunc("/monster/coop/calc", svc.HandleCoopCalc) // 协战围攻倍率计算

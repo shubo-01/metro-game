@@ -122,17 +122,25 @@ type Execer interface {
 }
 
 func recalcAndSaveDerived(e Execer, characterID int64) (DerivedAttrs, error) {
-	// 1. 读出当前“有效精气神” = 裸值(固定点+自由点) + 神位加成 shenwei_* 三列。
-	//    COALESCE 兼容旧数据：v3 迁移前建的行 shenwei_* 可能为 NULL，按 0 处理。
-	//    注意：洗点/加点只动 free_* 和 jing/qi/shen 裸值，不碰 shenwei_* 列，
-	//    神位加成由 shenwei 包在继承/切换时快照式覆盖写入，两者互不干扰。
+	// 1. 读出当前“有效精气神” = 裸值(固定点+自由点) + 神位加成 shenwei_* + 功法加成 gongfa_*。
+	//    COALESCE 兼容旧数据：v3/v4 迁移前建的行加成列可能为 NULL，按 0 处理。
+	//    注意：洗点/加点只动 free_* 和 jing/qi/shen 裸值，不碰加成列；
+	//    shenwei_* 由 shenwei 包快照式覆盖写（继承/切换），gongfa_* 由 gongfa 包
+	//    叠加式累计写（学习+=/遗忘-=），三套列互不干扰。
+	// 2. 走火入魔期（zouhuo_until > NOW()）有效精×0.5（PRD 2.5"精暴降50%持续72h"，
+	//    原文即"精属性暂时减半"，整数实现 jing/2 向下取整），衍生值随之变化。
 	var jing, qi, shen int
-	if err := e.QueryRow(`SELECT jing + COALESCE(shenwei_jing, 0),
-		       qi + COALESCE(shenwei_qi, 0),
-		       shen + COALESCE(shenwei_shen, 0)
+	var zouhuo bool
+	if err := e.QueryRow(`SELECT jing + COALESCE(shenwei_jing, 0) + COALESCE(gongfa_jing, 0),
+		       qi + COALESCE(shenwei_qi, 0) + COALESCE(gongfa_qi, 0),
+		       shen + COALESCE(shenwei_shen, 0) + COALESCE(gongfa_shen, 0),
+		       (zouhuo_until IS NOT NULL AND zouhuo_until > NOW())
 		FROM character_attributes WHERE character_id=?`, characterID).
-		Scan(&jing, &qi, &shen); err != nil {
+		Scan(&jing, &qi, &shen, &zouhuo); err != nil {
 		return DerivedAttrs{}, err
+	}
+	if zouhuo {
+		jing /= 2 // 走火入魔：有效精暴降50%
 	}
 	// 2. 按 V2 公式计算全部衍生值
 	d := CalcDerivedAttrs(jing, qi, shen)
@@ -331,21 +339,29 @@ func (s *Service) HandleInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	// 两种口径说明：
 	//   基础值（裸值）= jing/qi/shen 列本身（固定点+自由点），attributes 字段返回裸值，
-	//     前端继承门槛预检（神位继承要求按裸值判定，防加成套娃）必须用它；
-	//   有效值 = 裸值 + 神位加成 shenwei_*（COALESCE 兼容 v3 迁移前的 NULL 旧行），
+	//     前端继承/学习门槛预检（神位继承、功法学习要求都按裸值判定，防加成套娃）必须用它；
+	//   有效值 = 裸值 + 神位加成 shenwei_* + 功法加成 gongfa_*（COALESCE 兼容迁移前 NULL 旧行），
+	//     走火入魔期（zouhuo_until>NOW()）有效精再×0.5（PRD 2.5"精暴降50%"），
 	//     衍生属性（hp_max 等）按有效值计算，与 recalcAndSaveDerived 落库口径一致，
 	//     否则同一响应里 attributes.hp_max（含加成）与 derived.hp_max（不含）会互相矛盾。
 	var effJing, effQi, effShen int
+	var zouhuo bool
 	err = s.db.QueryRow(`SELECT jing, qi, shen, qi_yun, wu_xing,
 			hp_max, hp_current, mp_max, mp_current, soul_max, soul_current,
-			jing + COALESCE(shenwei_jing, 0), qi + COALESCE(shenwei_qi, 0), shen + COALESCE(shenwei_shen, 0)
+			jing + COALESCE(shenwei_jing, 0) + COALESCE(gongfa_jing, 0),
+			qi + COALESCE(shenwei_qi, 0) + COALESCE(gongfa_qi, 0),
+			shen + COALESCE(shenwei_shen, 0) + COALESCE(gongfa_shen, 0),
+			(zouhuo_until IS NOT NULL AND zouhuo_until > NOW())
 		FROM character_attributes WHERE character_id=?`, charID).
 		Scan(&attrs.Jing, &attrs.Qi, &attrs.Shen, &attrs.QiYun, &attrs.WuXing,
 			&attrs.HPMax, &attrs.HPCur, &attrs.MPMax, &attrs.MPCur, &attrs.SoulMax, &attrs.SoulCur,
-			&effJing, &effQi, &effShen)
+			&effJing, &effQi, &effShen, &zouhuo)
 	if err != nil {
 		writeJSON(w, 500, APIResponse{Code: 500, Msg: "角色属性数据缺失"})
 		return
+	}
+	if zouhuo {
+		effJing /= 2 // 走火入魔期：有效精暴降50%（与 recalcAndSaveDerived 同口径）
 	}
 
 	// 查 character_realm（每个字段单独声明，确保 JSON 标签正确映射）
@@ -396,6 +412,7 @@ func (s *Service) HandleInfo(w http.ResponseWriter, r *http.Request) {
 			"realm":             realm,
 			"qi_elements":       qiElements,
 			"element_count":     elementCount,
+			"zouhuo":            zouhuo, // 走火入魔中（有效精已减半，详情查 /gongfa/list）
 			"exp_multiplier":    GetExpMultiplier(elementCount),
 			"damage_multiplier": GetDamageMultiplier(elementCount),
 		},
@@ -419,23 +436,31 @@ func (s *Service) HandleAttributes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 两种口径说明（与 HandleInfo 一致）：
-	//   base_attrs 返回【裸值】jing/qi/shen —— 前端神位继承门槛预检要按裸值判定，不能给加成污染；
-	//   derived 按【有效值】= 裸值 + COALESCE(shenwei_*, 0) 计算 —— 与 recalcAndSaveDerived
-	//   落库的 current.hp_max 等口径对齐，避免同一响应中 current 含加成而 derived 不含的矛盾。
+	//   base_attrs 返回【裸值】jing/qi/shen —— 前端神位继承/功法学习门槛预检要按裸值判定，不能给加成污染；
+	//   derived 按【有效值】= 裸值 + COALESCE(shenwei_*, 0) + COALESCE(gongfa_*, 0) 计算，
+	//   走火入魔期有效精再×0.5 —— 与 recalcAndSaveDerived 落库的 current.hp_max 等口径对齐，
+	//   避免同一响应中 current 含加成而 derived 不含的矛盾。
 	var jing, qi, shen, qiYun, wuXing int
 	var hpMax, hpCur, mpMax, mpCur, soulMax, soulCur int
 	var effJing, effQi, effShen int
+	var zouhuo bool
 	err := s.db.QueryRow(
 		`SELECT jing, qi, shen, qi_yun, wu_xing,
 			hp_max, hp_current, mp_max, mp_current, soul_max, soul_current,
-			jing + COALESCE(shenwei_jing, 0), qi + COALESCE(shenwei_qi, 0), shen + COALESCE(shenwei_shen, 0)
+			jing + COALESCE(shenwei_jing, 0) + COALESCE(gongfa_jing, 0),
+			qi + COALESCE(shenwei_qi, 0) + COALESCE(gongfa_qi, 0),
+			shen + COALESCE(shenwei_shen, 0) + COALESCE(gongfa_shen, 0),
+			(zouhuo_until IS NOT NULL AND zouhuo_until > NOW())
 		FROM character_attributes WHERE character_id=?`,
 		charID,
 	).Scan(&jing, &qi, &shen, &qiYun, &wuXing, &hpMax, &hpCur, &mpMax, &mpCur, &soulMax, &soulCur,
-		&effJing, &effQi, &effShen)
+		&effJing, &effQi, &effShen, &zouhuo)
 	if err != nil {
 		writeJSON(w, 404, APIResponse{Code: 404, Msg: "角色属性不存在"})
 		return
+	}
+	if zouhuo {
+		effJing /= 2 // 走火入魔期：有效精暴降50%（与 recalcAndSaveDerived 同口径）
 	}
 
 	// 衍生属性按有效精气神现算（裸值口径见上方注释）
@@ -453,6 +478,7 @@ func (s *Service) HandleAttributes(w http.ResponseWriter, r *http.Request) {
 				"soul_max": soulMax, "soul_current": soulCur,
 			},
 			"derived": derived,
+			"zouhuo":  zouhuo, // 走火入魔中（有效精已减半）
 		},
 	})
 }
