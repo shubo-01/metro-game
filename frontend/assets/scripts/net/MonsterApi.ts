@@ -143,6 +143,45 @@ export interface CaptureAttemptData {
 }
 
 // ═══════════════════════════════════════════
+//  V5 新增：地图分区怪物 + 神兽NPC（白泽/朱厌）
+// ═══════════════════════════════════════════
+
+/** 神兽NPC不存在（/monster/divine-npc/hit 业务错误码） */
+export const ERR_DIVINE_NPC_NOT_FOUND = 6021;
+
+/**
+ * 神兽NPC状态信息（GET /monster/divine-npc/status 响应 divine_npcs 数组一项）
+ * V5 白泽(Zone2)/朱厌(Zone3)：平时沉睡不还手，10秒内连击10次将其唤醒，
+ * 唤醒后30秒暴走反击（大罗金妖仙99级，基本必死）
+ */
+export interface DivineNpcInfo {
+    npc_id: number;          // NPC ID：1白泽 2朱厌
+    name: string;            // 名称
+    zone_id: number;         // 所在分区
+    pos_x: number;           // X坐标（米）
+    pos_y: number;           // Y坐标（米）
+    realm_desc: string;      // 境界描述（大罗金妖仙）
+    level: number;           // 等级（99）
+    state: number;           // 状态：0沉睡 1暴走
+    wake_progress: number;   // 当前连击窗口内累计次数
+    wake_threshold: number;  // 唤醒阈值（10次）
+    awake_remain_s: number;  // 【暴走中】剩余暴走秒数
+    kill_count: number;      // 该神兽累计击杀玩家数
+}
+
+/** 攻击神兽NPC响应（POST /monster/divine-npc/hit） */
+export interface DivineNpcHitData {
+    npc_id: number;          // NPC ID
+    name: string;            // 名称
+    state: number;           // 攻击后状态：0沉睡 1暴走
+    wake_progress: number;   // 连击窗口内累计次数
+    wake_threshold: number;  // 唤醒阈值
+    awakened: boolean;       // 本次攻击是否触发唤醒（true=开始30秒暴走）
+    killed: boolean;         // 玩家是否被神兽反杀（true=前端走死亡流程）
+    awake_remain_s: number;  // 剩余暴走秒数
+}
+
+// ═══════════════════════════════════════════
 //  API 客户端
 // ═══════════════════════════════════════════
 
@@ -160,6 +199,32 @@ export class MonsterApi {
     /** 查询族群怪物实体列表（服务端懒刷新复活/妖幼崽CD） */
     static monsterList(factionId: number): Promise<ApiResponse<{ monsters: MonsterEntityInfo[] }>> {
         return HttpClient.get('/monster/list', { faction_id: String(factionId) });
+    }
+
+    /**
+     * 【V5】按地图分区查询怪物列表（小地图红点数据源）：
+     * 后端 /monster/list 兼容 zone_id 与 faction_id 两种查询参数（至少传一个），
+     * 本方法走 zone_id 口径，返回该分区内全部存活怪物
+     */
+    static monsterListByZone(zoneId: number): Promise<ApiResponse<{ monsters: MonsterEntityInfo[] }>> {
+        return HttpClient.get('/monster/list', { zone_id: String(zoneId) });
+    }
+
+    /**
+     * 【V5】神兽NPC（白泽/朱厌）状态列表：沉睡/暴走状态 + 唤醒进度 + 击杀数
+     * 小地图绿点与神兽交互提示的数据源
+     */
+    static divineNpcStatus(): Promise<ApiResponse<{ divine_npcs: DivineNpcInfo[] }>> {
+        return HttpClient.get('/monster/divine-npc/status');
+    }
+
+    /**
+     * 【V5】攻击神兽NPC：沉睡时不还手只累计连击（10秒窗口内攒满10次唤醒），
+     * awakened=true 表示本次触发唤醒（30秒暴走），killed=true 表示玩家被反杀
+     * （调用方须走死亡流程 SamsaraApi.trigger）。6021 NPC不存在
+     */
+    static divineNpcHit(playerId: number, npcId: number): Promise<ApiResponse<DivineNpcHitData>> {
+        return HttpClient.post('/monster/divine-npc/hit', { player_id: playerId, npc_id: npcId });
     }
 
     /** 全服20只神兽状态（唯一性展示） */

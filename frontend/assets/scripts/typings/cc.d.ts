@@ -162,6 +162,7 @@ declare module 'cc' {
     export function tween<T>(target: T): Tween<T>;
 
     export class EventTouch {
+        getID(): number;
         getLocationX(): number;
         getLocationY(): number;
         getLocation(): Vec2;

@@ -176,6 +176,7 @@ export interface CombatSkillData {
     equilibrium: number;      // 均衡加成（2=均衡Build 1=偏科）
     defender_shield: number;  // 防守方剩余护盾
     defender_hp: number;      // 防守方剩余HP
+    stagger_s?: number;       // 【V5】受击硬直秒数（喂给 CombatHUDUI.applyHit；旧版本响应无此字段）
     detail: CombatSkillDetail;
 }
 

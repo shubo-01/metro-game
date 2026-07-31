@@ -8,6 +8,8 @@ export const ServerConfig = {
     // ── 生产环境 ──
     /** HTTP API 基础地址（认证/玩家服务网关） */
     HTTP_BASE_URL: 'https://api.xunxian.game',
+    /** 场景服务地址（生产环境通过网关路由，此处备用） */
+    SCENE_BASE_URL: 'https://api.xunxian.game',
     /** 角色服务地址（生产环境通过网关路由，此处备用） */
     CHARACTER_BASE_URL: 'https://api.xunxian.game',
     /** 死亡服务地址（生产环境通过网关路由，此处备用） */
@@ -24,6 +26,8 @@ export const ServerConfig = {
     // ── 开发环境（各服务独立端口） ──
     /** 认证服务（auth-service）端口 8001 */
     DEV_HTTP_URL: 'http://127.0.0.1:8001',
+    /** 场景服务（scene-service）端口 8003 —— 场景进入/交互 + V5地图分区/采集/移动限速 */
+    DEV_SCENE_URL: 'http://127.0.0.1:8003',
     /** 角色服务（character-service）端口 8005 */
     DEV_CHARACTER_URL: 'http://127.0.0.1:8005',
     /** 死亡服务（death-service）端口 8006 */
@@ -42,6 +46,8 @@ export const ServerConfig = {
 export const TokenConfig = {
     ACCESS_TOKEN_KEY: 'xunxian_token',
     REFRESH_TOKEN_KEY: 'xunxian_refresh_token',
+    /** 账号ID本地存储键（V5 新增）：HttpClient 自动附带 X-Account-ID 请求头用 */
+    ACCOUNT_ID_KEY: 'xunxian_account_id',
     ACCESS_EXPIRES: 2 * 60 * 60 * 1000,   // 2小时
     REFRESH_EXPIRES: 7 * 24 * 60 * 60 * 1000, // 7天
 };
@@ -173,4 +179,87 @@ export enum SkillEvent {
     SKILL_LEARNED = 'skill:learned',
     /** 技能栏装配/卸下成功（slotSet 成功后广播，携带 SlotSetData，skill_id=0 表示卸下） */
     SKILL_SLOT_CHANGED = 'skill:slot_changed',
+}
+
+/**
+ * V5 地图坐标换算配置。
+ * 后端 Zone/采集点坐标单位是"米"（世界 1800×1200 米），
+ * 前端 Hall 场景渲染单位是"像素"（世界 3000×2000 像素），
+ * 两者比例恰好一致：3000/1800 = 2000/1200 = 5/3 ≈ 1.667 像素/米。
+ * 所有"米↔像素"换算必须统一走这里，禁止各文件自己写魔法数字。
+ */
+export const MapConfig = {
+    /** 1米等于多少像素（3000像素 ÷ 1800米） */
+    PIXELS_PER_METER: 3000 / 1800,
+    /** 像素坐标 → 米坐标（调用后端接口前换算） */
+    pxToMeter(px: number): number { return px / (3000 / 1800); },
+    /** 米坐标 → 像素坐标（后端回正坐标落回场景时换算） */
+    meterToPx(m: number): number { return m * (3000 / 1800); },
+    /** 采集交互半径（米）：离采集点 ≤5米 才允许采集（与后端 GatherMaxDistance 一致） */
+    GATHER_MAX_DISTANCE_M: 5,
+    /** 移动上报节流间隔（秒）：每隔1秒调一次 /scene/move/validate 做限速/出界校验 */
+    MOVE_VALIDATE_INTERVAL_S: 1,
+};
+
+/**
+ * V5 战斗操作层事件（生产者/消费者配对，禁止只监听无生产者）：
+ *   - BATTLE_SKILL_CAST / BATTLE_SHIELD_SETTLED：生产者为 BattleApi 封装层
+ *     （接口成功 code===0 且有 data 后自动 emit 并携带响应 data），消费者为 CombatHUDUI
+ *   - BATTLE_ROLL：生产者为 CombatHUDUI 翻滚按钮，消费者为 HallScene（执行翻滚位移）
+ *   - BATTLE_STAGGER：生产者为 CombatHUDUI.applyHit（战斗结算方把 /combat/skill 响应
+ *     的 stagger_s 喂进来时广播），消费者为 HallScene（硬直期间锁移动）与 CombatHUDUI 自身表现
+ */
+export enum BattleEvent {
+    /** 技能施放校验通过（/combat/cast 成功后广播，携带 CombatCastData，含 cooldown_s） */
+    BATTLE_SKILL_CAST = 'battle:skill_cast',
+    /** 护盾懒结算完成（/combat/shield/settle 成功后广播，携带 ShieldSettleData） */
+    BATTLE_SHIELD_SETTLED = 'battle:shield_settled',
+    /** 翻滚按钮按下（CombatHUDUI 广播，携带无参数；HallScene 收到后按当前朝向位移） */
+    BATTLE_ROLL = 'battle:roll',
+    /** 受击硬直（CombatHUDUI.applyHit 广播，携带硬直秒数 stagger_s；硬直期间锁玩家输入） */
+    BATTLE_STAGGER = 'battle:stagger',
+}
+
+/**
+ * V5 地图系统事件（生产者/消费者配对）：
+ *   - JOYSTICK_*：生产者为 JoystickUI（纯前端摇杆组件），消费者为 HallScene（移动输入源）
+ *   - ZONE_INFO_UPDATED / ZONE_ENTERED / MAP_GATHERED：生产者为 MapApi 封装层，
+ *     消费者为 MinimapUI（画分区边界/采集点）与 HallScene（分区横幅/采集结果提示）
+ *   - PLAYER_POS_CHANGED：生产者为 HallScene（节流广播玩家米坐标），消费者为 MinimapUI
+ */
+export enum MapEvent {
+    /** 摇杆拖动中（JoystickUI 广播，携带 {dirX,dirY,octant}：归一化方向+8方向档位0-7） */
+    JOYSTICK_MOVE = 'map:joystick_move',
+    /** 摇杆松开（JoystickUI 广播，无参数；HallScene 收到后停止摇杆移动） */
+    JOYSTICK_END = 'map:joystick_end',
+    /** 分区配置已拉取（/scene/zone/info 成功后广播，携带 ZoneInfoData 全量数据） */
+    ZONE_INFO_UPDATED = 'map:zone_info_updated',
+    /** 进入分区成功（/scene/zone/enter 成功后广播，携带 ZoneEnterData；HallScene 收到后弹分区横幅） */
+    ZONE_ENTERED = 'map:zone_entered',
+    /** 采集完成（/scene/gather 成功后广播，携带 GatherData；HallScene 收到后弹采集结果 toast） */
+    MAP_GATHERED = 'map:gathered',
+    /** 玩家位置变化（HallScene 节流广播，携带 {x,y} 米坐标；MinimapUI 据此重画中心） */
+    PLAYER_POS_CHANGED = 'map:player_pos_changed',
+}
+
+/**
+ * V5 轮回夺舍系统事件（生产者统一为 SamsaraApi 封装层，接口成功后自动 emit）：
+ *   - DEATH_OPTIONS_UPDATED 消费者为 CorpseCultivationUI（渲染死亡三选一）
+ *   - CORPSE_ENTERED / CORPSE_EXITED 消费者为 CorpseCultivationUI（尸修转换结果展示）
+ *   - THUNDER_CHECKED 消费者为 HallScene（天雷警告 toast/致死跳死亡流程）
+ *   - RUIN_CREATED / RUIN_INHERITED 消费者为 SecretRealmPanel（秘境操作结果展示）
+ */
+export enum SamsaraEvent {
+    /** 死亡三选一选项已拉取（/death/trigger 成功后广播，携带含 options/possess_hint 的 data） */
+    DEATH_OPTIONS_UPDATED = 'samsara:death_options_updated',
+    /** 进入尸修成功（/death/corpse/enter 成功后广播，携带属性转换前后对照） */
+    CORPSE_ENTERED = 'samsara:corpse_entered',
+    /** 退出尸修成功（/death/corpse/exit 成功后广播，无 data） */
+    CORPSE_EXITED = 'samsara:corpse_exited',
+    /** 天雷懒结算完成（/death/thunder/check 成功后广播，携带 ThunderCheckData） */
+    THUNDER_CHECKED = 'samsara:thunder_checked',
+    /** 秘境设立/更新成功（/death/ruins/create 成功后广播，携带含 updated 标记的 data） */
+    RUIN_CREATED = 'samsara:ruin_created',
+    /** 秘境继承/打破成功（/death/ruins/inherit 成功后广播，携带含 method 的 data） */
+    RUIN_INHERITED = 'samsara:ruin_inherited',
 }

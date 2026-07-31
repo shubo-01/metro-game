@@ -431,6 +431,12 @@ export class LoginPanel extends Component {
             this._tokenManager.save(data.token, data.refreshToken);
         }
 
+        // V5 新增：记录账号ID，HttpClient 自动给敏感接口附 X-Account-ID 请求头
+        const accountId = data.accountId || data.account_id || 0;
+        if (accountId > 0) {
+            HttpClient.setAccountId(accountId);
+        }
+
         EventManager.emit(GameEvent.AUTH_LOGIN_SUCCESS);
 
         if (data.hasCharacter && data.playerInfo) {

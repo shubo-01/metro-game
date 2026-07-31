@@ -17,9 +17,44 @@ export class HttpClient {
     /** 默认基础地址（认证/玩家服务） */
     private static _baseUrl: string = ServerConfig.DEV_HTTP_URL;
     private static _tokenManager: TokenManager;
+    /**
+     * 当前登录账号ID（V5 新增）：
+     * 后端 character/death 等服务的敏感接口做归属校验时，从请求头 X-Account-ID
+     * 读取账号（缺失=401未认证 / 非本人=403）。登录成功后由调用方 setAccountId 写入，
+     * 并持久化到本地存储（微信 storage / localStorage），重进游戏后自动恢复。
+     */
+    private static _accountId: number = 0;
 
     static init(tokenManager: TokenManager) {
         HttpClient._tokenManager = tokenManager;
+    }
+
+    /** 设置当前账号ID（登录成功后调用，0=清除），自动持久化 */
+    static setAccountId(accountId: number) {
+        HttpClient._accountId = accountId;
+        try {
+            if (typeof wx !== 'undefined' && wx.setStorageSync) {
+                wx.setStorageSync(TokenConfig.ACCOUNT_ID_KEY, String(accountId));
+            } else {
+                localStorage.setItem(TokenConfig.ACCOUNT_ID_KEY, String(accountId));
+            }
+        } catch { /* 存储失败不阻断，内存值仍然可用 */ }
+    }
+
+    /** 读取当前账号ID（内存没有时从本地存储恢复，没有则返回0） */
+    static getAccountId(): number {
+        if (HttpClient._accountId > 0) return HttpClient._accountId;
+        try {
+            let v = '';
+            if (typeof wx !== 'undefined' && wx.getStorageSync) {
+                v = wx.getStorageSync(TokenConfig.ACCOUNT_ID_KEY) || '';
+            } else {
+                v = localStorage.getItem(TokenConfig.ACCOUNT_ID_KEY) || '';
+            }
+            const n = parseInt(v, 10);
+            if (!isNaN(n) && n > 0) HttpClient._accountId = n;
+        } catch { /* 读取失败按未设置处理 */ }
+        return HttpClient._accountId;
     }
 
     static setBaseUrl(url: string) {
@@ -62,6 +97,10 @@ export class HttpClient {
         if (path.startsWith('/death/')) {
             return ServerConfig.DEV_DEATH_URL;
         }
+        // V5 地图系统：分区/采集/移动限速都在场景服务（8003）
+        if (path.startsWith('/scene/')) {
+            return ServerConfig.DEV_SCENE_URL;
+        }
         if (path.startsWith('/dungeon/') || path.startsWith('/fatigue/')) {
             return ServerConfig.DEV_DUNGEON_URL;
         }
@@ -101,6 +140,11 @@ export class HttpClient {
         };
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
+        }
+        // V5 新增：附带账号ID头，供后端敏感接口做归属校验（缺失=401 / 非本人=403）
+        const accountId = HttpClient.getAccountId();
+        if (accountId > 0) {
+            headers['X-Account-ID'] = String(accountId);
         }
 
         return new Promise((resolve, reject) => {
