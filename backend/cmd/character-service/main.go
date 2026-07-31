@@ -104,6 +104,16 @@ func main() {
 	mux.HandleFunc("/skill/list", gfSvc.HandleSkillList)                  // 技能总览（背包/栏位/可装配状态）
 	mux.HandleFunc("/skill/slot/set", gfSvc.HandleSlotSet)                // 技能栏装配/卸下（主动1-10/被动1-4）
 
+	// ── V6 基础UI交互路由（设置/新手引导，实现见 internal/character/handler_ui.go）──
+	// 说明：技术文档的 UIPanelService（面板状态）与 DamageNumberService（伤害数字队列）
+	// 按既定裁决不做后端实现，纯前端承担，故此处只有设置与引导两组接口。
+	mux.HandleFunc("/character/settings", svc.HandleSettingsGet)             // 读设置（无行返回文档默认值）
+	mux.HandleFunc("/character/settings/save", svc.HandleSettingsSave)       // 保存设置（取值范围校验，非法6401）
+	mux.HandleFunc("/character/settings/reset", svc.HandleSettingsReset)     // 重置为默认设置
+	mux.HandleFunc("/character/tutorial/status", svc.HandleTutorialStatus)   // 引导进度+步骤配置
+	mux.HandleFunc("/character/tutorial/advance", svc.HandleTutorialAdvance) // 推进步骤（非法跳步6402，末步发奖励）
+	mux.HandleFunc("/character/tutorial/skip", svc.HandleTutorialSkip)       // 跳过引导（不可逆，不发奖励）
+
 	// 启动服务
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}

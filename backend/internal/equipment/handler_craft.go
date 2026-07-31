@@ -632,22 +632,9 @@ func (s *Service) HandleInventoryCapacity(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 查询已穿戴的腰带（slot_type=8）
-	beltExtra, beltQuick := 0, 0
-	var beltQuality int
-	err := s.db.QueryRow(`SELECT quality FROM equipment_instance
-		WHERE owner_id = ? AND slot_type = ? AND is_equipped = 1 AND status = 0`,
-		playerID, SlotBelt).Scan(&beltQuality)
-	if err == nil {
-		if qc, ok := s.getQualityConfig(beltQuality); ok {
-			beltExtra = qc.BeltExtraSlots
-			beltQuick = qc.BeltQuickSlots
-		}
-	}
-
-	// 仓库容量（房产系统预留，当前返回已占用格数）
-	var warehouseUsed int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM player_warehouse WHERE player_id = ?`, playerID).Scan(&warehouseUsed)
+	// 腰带扩展格数与仓库占用统一走 calcInventoryCapacity（V6 抽出的共用函数，
+	// 与 /inventory/list 返回的容量口径完全一致，避免两处各算一遍算出不同结果）
+	beltExtra, beltQuick, warehouseUsed := s.calcInventoryCapacity(playerID)
 
 	writeJSON(w, http.StatusOK, APIResponse{Code: 0, Msg: "ok", Data: map[string]interface{}{
 		"base_slots":       BaseInventorySlots,

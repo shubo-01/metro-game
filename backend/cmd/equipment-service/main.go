@@ -91,6 +91,13 @@ func main() {
 	// 背包容量接口（腰带扩展）
 	mux.HandleFunc("/inventory/capacity", svc.HandleInventoryCapacity)
 
+	// ── V6 基础UI交互路由（背包面板/商店面板，实现见 internal/equipment/handler_inventory.go）──
+	mux.HandleFunc("/inventory/list", svc.HandleInventoryList) // 背包物品聚合列表+容量
+	mux.HandleFunc("/inventory/item/use", svc.HandleItemUse)   // 使用消耗品（回血/前端效果）
+	mux.HandleFunc("/shop/list", svc.HandleShopList)           // 商店商品分类列表
+	mux.HandleFunc("/shop/buy", svc.HandleShopBuy)             // 购买（扣灵石，物品入包）
+	mux.HandleFunc("/shop/sell", svc.HandleShopSell)           // 出售（回收价=购买价50%）
+
 	// 健康检查接口（供部署/监控用）
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
