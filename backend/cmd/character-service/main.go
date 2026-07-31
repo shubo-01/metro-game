@@ -79,6 +79,10 @@ func main() {
 	mux.HandleFunc("/combat/shield/recover", svc.HandleShieldRecover)        // 脱战护盾恢复
 	mux.HandleFunc("/combat/burn/tick", svc.HandleBurnTick)                  // 灼烧持续掉血结算（每秒一跳）
 
+	// ── V5 战斗操作层新增路由（实现见 internal/character/combat_v5.go）──
+	mux.HandleFunc("/combat/cast", svc.HandleCombatCast)           // 技能施放校验（CD+灵力权威扣减）
+	mux.HandleFunc("/combat/shield/settle", svc.HandleShieldSettle) // 护盾脱战恢复懒结算
+
 	// ── 神位系统路由（实现见 internal/shenwei/handler.go）──
 	mux.HandleFunc("/shenwei/info", swSvc.HandleInfo)             // 神位总览（当前/背包/碎片/归元符/灵石）
 	mux.HandleFunc("/shenwei/synthesize", swSvc.HandleSynthesize) // 碎片合成（7碎片→1神位）

@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -135,49 +136,93 @@ type MonsterEntityInfo struct {
 	PosY      float64 `json:"pos_y"`      // Y坐标
 }
 
-// HandleMonsterList 查询某族群的怪物实体列表
+// HandleMonsterList 查询怪物实体列表
 // 查询前先做"懒刷新"：将已到复活时间的死亡怪物/妖幼崽恢复
+// V5 增量参数 zone_id（向后兼容）：
+//   - 只传 faction_id：行为与旧版完全一致（按族群查）
+//   - 只传 zone_id：查该地图分区（faction_instance.zone_id 联查）下全部族群的怪物
+//   - 两个都传：按族群查并校验该族群确实属于该分区
 func (s *Service) HandleMonsterList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, 405, APIResponse{Code: 405, Msg: "方法不允许"})
 		return
 	}
 	factionID := queryInt(r, "faction_id")
-	if factionID <= 0 {
-		writeJSON(w, 400, APIResponse{Code: 400, Msg: "faction_id 无效"})
+	zoneID := queryInt(r, "zone_id") // V5 新增可选参数：地图分区过滤
+	if factionID <= 0 && zoneID <= 0 {
+		writeJSON(w, 400, APIResponse{Code: 400, Msg: "faction_id 与 zone_id 至少传一个"})
 		return
 	}
 
-	// ── 懒刷新1：死亡的普通/精英/Boss/妖 到复活时间后原地满血复活 ──
-	// 神兽(6)/神兽幼崽(7)被消灭/抓捕后不刷新（respawn_at 为 NULL 不会命中）
-	_, _ = s.db.Exec(
-		`UPDATE monster_entity SET state=0, hp=max_hp, respawn_at=NULL
-		 WHERE faction_id=? AND state=3 AND type IN (1,2,3,4) AND respawn_at IS NOT NULL AND respawn_at<=NOW()`,
-		factionID,
-	)
-	// ── 懒刷新2：被抓的妖幼崽 CD到期后刷新（随机五行重新分配，PRD 5.3） ──
-	s.respawnYaoCubs(int64(factionID))
-
-	rows, err := s.db.Query(
-		`SELECT entity_id, faction_id, species_id, type, tier, element, hp, max_hp, atk, def, spd, state, pos_x, pos_y
-		 FROM monster_entity WHERE faction_id=? AND state<>4 ORDER BY type, entity_id`,
-		factionID,
-	)
-	if err != nil {
-		writeJSON(w, 500, APIResponse{Code: 500, Msg: "查询怪物失败: " + err.Error()})
-		return
-	}
-	defer rows.Close()
-
-	list := make([]MonsterEntityInfo, 0, 70)
-	for rows.Next() {
-		var m MonsterEntityInfo
-		if err := rows.Scan(&m.EntityID, &m.FactionID, &m.SpeciesID, &m.Type, &m.Tier, &m.Element,
-			&m.HP, &m.MaxHP, &m.ATK, &m.DEF, &m.SPD, &m.State, &m.PosX, &m.PosY); err != nil {
-			writeJSON(w, 500, APIResponse{Code: 500, Msg: "数据解析失败: " + err.Error()})
+	// 确定本次要懒刷新+查询的族群集合
+	var factionIDs []int64
+	if factionID > 0 {
+		if zoneID > 0 {
+			// 两参数都传：校验族群归属分区（防止前端按错分区拉数据）
+			var fz int
+			err := s.db.QueryRow("SELECT zone_id FROM faction_instance WHERE faction_id=?", factionID).Scan(&fz)
+			if err != nil {
+				writeJSON(w, 404, APIResponse{Code: 404, Msg: "族群不存在"})
+				return
+			}
+			if fz != zoneID {
+				writeJSON(w, 400, APIResponse{Code: 400, Msg: fmt.Sprintf("族群%d不属于分区%d", factionID, zoneID)})
+				return
+			}
+		}
+		factionIDs = []int64{int64(factionID)}
+	} else {
+		// 只传 zone_id：拉取该分区全部族群
+		rows, err := s.db.Query("SELECT faction_id FROM faction_instance WHERE zone_id=?", zoneID)
+		if err != nil {
+			writeJSON(w, 500, APIResponse{Code: 500, Msg: "查询分区族群失败: " + err.Error()})
 			return
 		}
-		list = append(list, m)
+		for rows.Next() {
+			var fid int64
+			if rows.Scan(&fid) == nil {
+				factionIDs = append(factionIDs, fid)
+			}
+		}
+		rows.Close()
+		if len(factionIDs) == 0 {
+			writeJSON(w, 200, APIResponse{Code: 0, Msg: "ok", Data: map[string]interface{}{"monsters": []MonsterEntityInfo{}}})
+			return
+		}
+	}
+
+	list := make([]MonsterEntityInfo, 0, 70*len(factionIDs))
+	for _, fid := range factionIDs {
+		// ── 懒刷新1：死亡的普通/精英/Boss/妖 到复活时间后原地满血复活 ──
+		// 神兽(6)/神兽幼崽(7)被消灭/抓捕后不刷新（respawn_at 为 NULL 不会命中）
+		_, _ = s.db.Exec(
+			`UPDATE monster_entity SET state=0, hp=max_hp, respawn_at=NULL
+			 WHERE faction_id=? AND state=3 AND type IN (1,2,3,4) AND respawn_at IS NOT NULL AND respawn_at<=NOW()`,
+			fid,
+		)
+		// ── 懒刷新2：被抓的妖幼崽 CD到期后刷新（随机五行重新分配，PRD 5.3） ──
+		s.respawnYaoCubs(fid)
+
+		rows, err := s.db.Query(
+			`SELECT entity_id, faction_id, species_id, type, tier, element, hp, max_hp, atk, def, spd, state, pos_x, pos_y
+			 FROM monster_entity WHERE faction_id=? AND state<>4 ORDER BY type, entity_id`,
+			fid,
+		)
+		if err != nil {
+			writeJSON(w, 500, APIResponse{Code: 500, Msg: "查询怪物失败: " + err.Error()})
+			return
+		}
+		for rows.Next() {
+			var m MonsterEntityInfo
+			if err := rows.Scan(&m.EntityID, &m.FactionID, &m.SpeciesID, &m.Type, &m.Tier, &m.Element,
+				&m.HP, &m.MaxHP, &m.ATK, &m.DEF, &m.SPD, &m.State, &m.PosX, &m.PosY); err != nil {
+				rows.Close()
+				writeJSON(w, 500, APIResponse{Code: 500, Msg: "数据解析失败: " + err.Error()})
+				return
+			}
+			list = append(list, m)
+		}
+		rows.Close()
 	}
 	writeJSON(w, 200, APIResponse{Code: 0, Msg: "ok", Data: map[string]interface{}{"monsters": list}})
 }
@@ -336,7 +381,9 @@ func (s *Service) HandleMonsterHit(w http.ResponseWriter, r *http.Request) {
 			// 神兽本体被消灭：登记唯一性状态（不刷新）
 			_, _ = s.db.Exec("UPDATE divine_beast SET is_captured=1 WHERE entity_id=?", req.EntityID)
 		} else {
-			respawnAt := time.Now().Add(MonsterRespawnCD * time.Second)
+			// V5 刷新CD分档（PRD：普通5分钟/精英10分钟/Boss30分钟/妖2小时），
+			// 不再统一用 MonsterRespawnCD=300，按类型查档（见 zone_v5.go RespawnCDByType）
+			respawnAt := time.Now().Add(RespawnCDByType(mType))
 			_, err = s.db.Exec("UPDATE monster_entity SET hp=0, state=3, respawn_at=? WHERE entity_id=?", respawnAt, req.EntityID)
 		}
 	} else {
@@ -500,7 +547,11 @@ func (s *Service) HandleCaptureAttempt(w http.ResponseWriter, r *http.Request) {
 		_, _ = s.db.Exec(
 			"UPDATE yao_cub SET is_captured=1, respawn_at=? WHERE entity_id=?", respawnAt, req.EntityID)
 		// Redis CD key（技术方案 5.3）：yao_cub:respawn:{faction_id}，TTL=刷新CD
-		_ = s.rdb.Set(fmt.Sprintf("yao_cub:respawn:%d", factionID), req.EntityID, YaoCubRespawnCD*time.Second)
+		// 评审修复：Redis 写失败不阻断抓捕主流程（MySQL respawn_at 已落库兜底），但必须打日志
+		if err := s.rdb.Set(fmt.Sprintf("yao_cub:respawn:%d", factionID), req.EntityID, YaoCubRespawnCD*time.Second); err != nil {
+			log.Printf("[capture/attempt] 妖幼崽刷新CD写入Redis失败（MySQL respawn_at 已兜底）: faction_id=%d entity_id=%d err=%v",
+				factionID, req.EntityID, err)
+		}
 	}
 
 	logCapture(true)

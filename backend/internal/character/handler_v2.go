@@ -675,7 +675,8 @@ func (s *Service) HandleCombatSkill(w http.ResponseWriter, r *http.Request) {
 		ApplyDamage(defShieldCur, int64(defHPCur), dmg.RawDamage)
 
 	// 9. 事务内落库防守方最新护盾/HP，然后提交释放行锁
-	if _, err = tx.Exec("UPDATE character_attributes SET shield_current=?, hp_current=? WHERE character_id=?",
+	//    V5：同时刷新防守方 last_combat_time=NOW()（护盾脱战懒结算锚点，见 combat_v5.go）
+	if _, err = tx.Exec("UPDATE character_attributes SET shield_current=?, hp_current=?, last_combat_time=NOW() WHERE character_id=?",
 		shieldAfter, hpAfter, req.DefenderID); err != nil {
 		writeJSON(w, 500, APIResponse{Code: 500, Msg: "伤害结算落库失败"})
 		return
@@ -684,6 +685,14 @@ func (s *Service) HandleCombatSkill(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, APIResponse{Code: 500, Msg: "提交失败"})
 		return
 	}
+
+	// V5：攻击方也算"进入战斗"，同样刷新 last_combat_time。
+	// 【锁序说明】必须放在事务提交之后 best-effort 更新：若在事务内更新攻击方行，
+	// A打B与B打A并发时会形成 "锁B等A" 与 "锁A等B" 的交叉持锁 → 死锁。
+	_, _ = s.db.Exec("UPDATE character_attributes SET last_combat_time=NOW() WHERE character_id=?", req.AttackerID)
+
+	// V5：受击硬直时长下发（PVP技能按普攻档0.2秒，暴击+0.1秒；分档纯函数见 combat_v5.go）
+	staggerS := CalcHitStagger(HitSourceNormal, isCrit)
 
 	writeJSON(w, 200, APIResponse{
 		Code: 0,
@@ -694,6 +703,7 @@ func (s *Service) HandleCombatSkill(w http.ResponseWriter, r *http.Request) {
 			"hp_damage":       hpDamage,        // 打到本体的伤害
 			"shield_broken":   shieldBroken,    // 是否破盾
 			"is_crit":         isCrit,          // 是否暴击
+			"stagger_s":       staggerS,        // V5：受击硬直秒数（普攻0.2s，暴击+0.1s）
 			"equilibrium":     dmg.Equilibrium, // 均衡加成（2=均衡Build 1=偏科）
 			"defender_shield": shieldAfter,     // 防守方剩余护盾
 			"defender_hp":     hpAfter,         // 防守方剩余HP

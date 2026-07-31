@@ -1,6 +1,11 @@
 // death-service 死亡服务入口
-// 负责死亡处理、六道轮回、鬼修转换、夺舍、兽身、遗迹洞府、公敌系统
+// 负责死亡处理、六道轮回、鬼修转换、尸修转换、夺舍、兽身、遗迹洞府（秘境）、公敌与天雷系统
 // 端口：8006
+//
+// V5 新增路由（战斗地图轮回夺舍迭代，见 internal/death/handler_v5.go）：
+//   POST /death/corpse/enter   转入尸修（神→0、精=原精+神×2/3、气=气/3，与鬼修互斥）
+//   POST /death/corpse/exit    退出尸修（神仍为0不可逆）
+//   POST /death/thunder/check  天雷懒结算（公敌登录/到期触发，伤害=800×4×ratio×9）
 package main
 
 import (
@@ -57,6 +62,10 @@ func main() {
 	mux.HandleFunc("/death/ruins/inherit", svc.HandleRuinsInherit)
 	mux.HandleFunc("/death/state", svc.HandleDeathState) // 查询角色死亡状态（含夺舍次数）
 	mux.HandleFunc("/death/public-enemy/status", svc.HandlePublicEnemyStatus)
+	// ── V5 战斗地图轮回夺舍迭代新增（handler_v5.go）──
+	mux.HandleFunc("/death/corpse/enter", svc.HandleCorpseEnter)     // 转入尸修
+	mux.HandleFunc("/death/corpse/exit", svc.HandleCorpseExit)       // 退出尸修
+	mux.HandleFunc("/death/thunder/check", svc.HandleThunderCheck)   // 天雷懒结算
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{Addr: addr, Handler: middleware.CORS(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}

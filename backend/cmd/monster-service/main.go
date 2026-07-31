@@ -2,6 +2,13 @@
 // 负责初始之地野怪系统（领地/族群/怪物实体/协战倍率/抓捕/神兽唯一性/世界初始化）。
 // 严格按照《寻仙 - 初始之地野怪系统 PRD+技术方案》实现。
 // 端口：8008
+//
+// V5 新增路由（战斗地图轮回夺舍迭代，见 internal/monster/zone_v5.go）：
+//   GET  /monster/divine-npc/status  神兽NPC状态（白泽/朱厌沉眠状态机，查询即懒结算）
+//   POST /monster/divine-npc/hit     攻击神兽NPC（沉眠→持续攻击唤醒→秒杀反击→回沉眠）
+// V5 增量改造（向后兼容）：
+//   GET  /monster/list 新增可选参数 zone_id（按地图分区过滤怪物）
+//   POST /monster/hit  死亡刷新CD改为分档（普通5分/精英10分/Boss30分/妖2小时）
 package main
 
 import (
@@ -65,6 +72,10 @@ func main() {
 	mux.HandleFunc("/monster/list", svc.HandleMonsterList)           // 怪物实体列表（?faction_id=，含懒刷新）
 	mux.HandleFunc("/monster/divine/status", svc.HandleDivineStatus) // 全服20只神兽状态
 	mux.HandleFunc("/monster/ehp", svc.HandleEhp)                    // EHP查表（功法系统，见 internal/monster/ehp.go）
+
+	// V5 神兽NPC沉眠状态机（白泽/朱厌，见 internal/monster/zone_v5.go）
+	mux.HandleFunc("/monster/divine-npc/status", svc.HandleDivineNpcStatus) // 神兽NPC状态（懒结算）
+	mux.HandleFunc("/monster/divine-npc/hit", svc.HandleDivineNpcHit)       // 攻击神兽NPC
 
 	// 战斗/协战接口（服务端权威）
 	mux.HandleFunc("/monster/coop/calc", svc.HandleCoopCalc) // 协战围攻倍率计算
