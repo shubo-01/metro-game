@@ -1,13 +1,23 @@
 /**
  * 寻仙 - 大厅 UI 面板
  * 角色信息栏、属性快览、小地图、功能入口、快捷操作、聊天栏
+ *
+ * V6 变更：功能入口/快捷操作运行时构建为可点按钮；
+ * 背包/商店/设置三个入口接 PanelManager.openPanel（面板脚本见 ui/ 下同名文件）；
+ * 「背包」入口节点注册为引导目标 btn_inventory（第3步高亮用）
  */
 
 import { _decorator, Component, Label, Node, Color, ScrollView } from 'cc';
 import { PlayerManager } from '../../manager/PlayerManager';
+import { PanelManager, PanelType } from '../../manager/PanelManager';
 import { ThemeColor } from '../../common/Constants';
+import { TutorialUI } from '../../ui/TutorialUI';
 
 const { ccclass, property } = _decorator;
+
+/** 入口按钮排布px（每格宽度/行高；PRD 未给具体像素，假设值可配） */
+const ENTRY_WIDTH = 96;
+const ENTRY_HEIGHT = 80;
 
 @ccclass('HallUI')
 export class HallUI extends Component {
@@ -57,6 +67,72 @@ export class HallUI extends Component {
         { name: '帮派', icon: '🏯' },
         { name: '设置', icon: '⚙️' },
     ];
+
+    onLoad() {
+        // 运行时构建功能入口/快捷操作按钮（配置见上方数组）
+        this._buildEntries();
+    }
+
+    onDestroy() {
+        // 注销引导目标，防场景切换后 TutorialUI 持有失效节点
+        TutorialUI.unregisterTarget('btn_inventory');
+    }
+
+    // ═══════════════════════════════════════
+    //  V6 入口构建（背包/商店/设置接 PanelManager）
+    // ═══════════════════════════════════════
+
+    /** 按配置数组创建入口按钮（每格：Label 显示"图标\n名称"，横向排布） */
+    private _buildEntries() {
+        // 功能入口栏（副本/阵营/.../背包/商店/...）
+        this._funcEntries.forEach((entry, i) => {
+            const node = this._createEntryNode(this.funcEntryContainer, entry.name,
+                entry.icon, i, entry.unlocked);
+            if (!node) return;
+            if (entry.name === '背包') {
+                node.on(Node.EventType.TOUCH_END,
+                    () => PanelManager.openPanel(PanelType.Inventory), this);
+                // 引导第3步「装备武器」高亮/箭头目标（元素ID见 tutorial_step_config）
+                TutorialUI.registerTarget('btn_inventory', node);
+            } else if (entry.name === '商店') {
+                node.on(Node.EventType.TOUCH_END,
+                    () => PanelManager.openPanel(PanelType.Shop), this);
+            } else if (!entry.unlocked) {
+                // reqStage 只在未解锁项上有（混合数组推导为联合类型，这里窄化读取）
+                const reqStage = (entry as { reqStage?: number }).reqStage;
+                node.on(Node.EventType.TOUCH_END,
+                    () => this.showToast(`${entry.name}未解锁（需境界 ${reqStage ?? '-'}）`), this);
+            }
+            // 其余已解锁入口（副本/阵营等）由各自场景/面板既有逻辑接管，这里不绑定
+        });
+
+        // 快捷操作栏（修炼/传送/.../设置）
+        this._quickActions.forEach((action, i) => {
+            const node = this._createEntryNode(this.quickActionContainer, action.name,
+                action.icon, i, true);
+            if (!node) return;
+            if (action.name === '设置') {
+                node.on(Node.EventType.TOUCH_END,
+                    () => PanelManager.openPanel(PanelType.Settings), this);
+            }
+            // 其余快捷操作由既有逻辑接管，这里不绑定
+        });
+    }
+
+    /** 创建单个入口按钮节点（横排；未解锁灰显） */
+    private _createEntryNode(container: Node | null, name: string, icon: string,
+                             index: number, unlocked: boolean): Node | null {
+        if (!container) return null;
+        const node = new Node(`Entry_${name}`);
+        node.setPosition(index * ENTRY_WIDTH, 0, 0);
+        const label = node.addComponent(Label);
+        label.string = `${icon}\n${name}`;
+        label.fontSize = 20;
+        label.lineHeight = ENTRY_HEIGHT / 2;
+        label.color = new Color().fromHEX(unlocked ? ThemeColor.TEXT_WHITE : ThemeColor.TEXT_GRAY);
+        container.addChild(node);
+        return node;
+    }
 
     // ═══════════════════════════════════════
     //  公开方法

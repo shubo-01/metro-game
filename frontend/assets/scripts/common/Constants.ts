@@ -263,3 +263,111 @@ export enum SamsaraEvent {
     /** 秘境继承/打破成功（/death/ruins/inherit 成功后广播，携带含 method 的 data） */
     RUIN_INHERITED = 'samsara:ruin_inherited',
 }
+
+// ═══════════════════════════════════════════════════
+//  基础UI交互逻辑迭代（V6）：事件与设置默认值
+// ═══════════════════════════════════════════════════
+
+/**
+ * V6 通用UI层事件（生产者/消费者配对，禁止孤儿事件）：
+ *   - PANEL_OPENED：生产者为 PanelManager.openPanel/openSubPanel，
+ *     消费者为 TutorialSystem（第3步"打开背包"完成判定）与 TutorialUI（面板打开时隐藏引导层防遮挡）
+ *   - PANEL_CLOSED：生产者为 PanelManager.closeTop/closeAll，
+ *     消费者为 TutorialUI（面板全关后恢复引导层显示）
+ *   - SETTINGS_UPDATED：生产者为 SettingsApi 封装层（get/save/reset 成功后广播服务端设置），
+ *     消费者为 SettingsPanel（用最新值刷新全部控件显示）
+ */
+export enum UIEvent {
+    /** 面板已打开（PanelManager 广播，携带 {type,level}：面板类型+层级1/2） */
+    PANEL_OPENED = 'ui:panel_opened',
+    /** 面板已关闭（PanelManager 广播，携带 {type,level}） */
+    PANEL_CLOSED = 'ui:panel_closed',
+    /** 设置数据已刷新（SettingsApi get/save/reset 成功后广播，携带 17 项设置对象） */
+    SETTINGS_UPDATED = 'ui:settings_updated',
+}
+
+/**
+ * V6 背包系统事件（生产者：InventoryApi 封装层；消费者：InventoryPanel）
+ *   - INVENTORY_UPDATED：list 成功后广播，InventoryPanel 渲染网格/容量/灵石
+ *   - ITEM_USED：use 成功后广播，InventoryPanel 弹 heal/CD 反馈并重拉列表
+ */
+export enum InventoryEvent {
+    /** 背包列表已刷新（/inventory/list 成功后广播，携带 InventoryListData 全量数据） */
+    INVENTORY_UPDATED = 'inventory:updated',
+    /** 物品使用成功（/inventory/item/use 成功后广播，携带 ItemUseData，含 effect 明细） */
+    ITEM_USED = 'inventory:item_used',
+}
+
+/**
+ * V6 商店系统事件（生产者：InventoryApi 封装层；消费者：ShopPanel / InventoryPanel）
+ *   - SHOP_UPDATED：shopList 成功后广播，ShopPanel 渲染商品列表与灵石余额
+ *   - SHOP_BOUGHT：buy 成功后广播，ShopPanel 弹购买结果并刷新余额
+ *   - SHOP_SOLD：sell 成功后广播，ShopPanel 与 InventoryPanel（背包内出售入口）都监听刷新
+ */
+export enum ShopEvent {
+    /** 商店列表已刷新（/shop/list 成功后广播，携带 ShopListData 全量数据） */
+    SHOP_UPDATED = 'shop:updated',
+    /** 购买成功（/shop/buy 成功后广播，携带 ShopBuyData，含扣费与余额） */
+    SHOP_BOUGHT = 'shop:bought',
+    /** 出售成功（/shop/sell 成功后广播，携带 ShopSellData，含收入与余额） */
+    SHOP_SOLD = 'shop:sold',
+}
+
+/**
+ * V6 新手引导事件（生产者/消费者配对）：
+ *   - TUTORIAL_STATUS_UPDATED / TUTORIAL_ADVANCED / TUTORIAL_SKIPPED：
+ *     生产者为 TutorialApi 封装层（接口成功后自动广播），消费者为 TutorialSystem（驱动状态机）
+ *   - TUTORIAL_STEP_CHANGED：生产者为 TutorialSystem（进入新步骤时广播步骤配置），
+ *     消费者为 TutorialUI（刷新高亮/箭头/文案）
+ *   - TUTORIAL_FINISHED：生产者为 TutorialSystem（第4步完成或跳过后广播），
+ *     消费者为 TutorialUI（隐藏引导层 + 第4步完成时 toast 展示奖励）
+*   - TUTORIAL_TOAST：生产者为 TutorialSystem（advance 遇 6402/6403 业务错误时
+ *     广播中文文案），消费者为 TutorialUI（用 toastLabel 弹 2 秒提示）
+ *   - NPC_TALKED：生产者为 HallScene._interactNPC（NPC 对话成功后广播 npcId），
+ *     消费者为 TutorialSystem（第1步"和营地长老对话"完成判定）
+ */
+export enum TutorialEvent {
+    /** 引导状态已拉取（/character/tutorial/status 成功后广播，携带 TutorialStatusData） */
+    TUTORIAL_STATUS_UPDATED = 'tutorial:status_updated',
+    /** 引导推进成功（/character/tutorial/advance 成功后广播，携带 TutorialAdvanceData） */
+    TUTORIAL_ADVANCED = 'tutorial:advanced',
+    /** 引导已跳过（/character/tutorial/skip 成功后广播，不可逆且不发奖励） */
+    TUTORIAL_SKIPPED = 'tutorial:skipped',
+    /** 引导步骤切换（TutorialSystem 广播，携带当前步骤配置 TutorialStepInfo） */
+    TUTORIAL_STEP_CHANGED = 'tutorial:step_changed',
+    /** 引导结束（TutorialSystem 广播，携带 {skipped, rewards}；完成走奖励展示、跳过则无奖励） */
+    TUTORIAL_FINISHED = 'tutorial:finished',
+    /** 引导错误提示（TutorialSystem 广播，携带中文文案字符串；TutorialUI 用 toast 展示 6402/6403 反馈） */
+    TUTORIAL_TOAST = 'tutorial:toast',
+    /** NPC 对话完成（HallScene 广播，携带 npcId；TutorialSystem 判定第1步完成条件） */
+    NPC_TALKED = 'tutorial:npc_talked',
+}
+
+/**
+ * V6 UI设置默认值（17项，与后端 sql/migrations/v6_ui_system.sql 的
+ * player_ui_settings DDL 默认值逐项一致，键名与接口 JSON snake_case 一致）。
+ * 服务端无设置行时 GET /character/settings 也返回这套默认值（is_default=true），
+ * 本地存储未登录兜底、SettingsStorage.reset 恢复默认都以此为准。
+ */
+export const SettingsDefaults = {
+    graphics_quality: 2,       // 画质：0低 1中 2高（默认高）
+    target_fps: 60,            // 目标帧率：30/60/120
+    effect_level: 2,           // 特效强度：0关 1低 2全（默认全）
+    screen_shake: 1,           // 屏幕震动：0关 1开
+    bgm_volume: 80,            // 背景音乐音量 0-100
+    skill_volume: 80,          // 技能音效音量 0-100
+    env_volume: 60,            // 环境音音量 0-100
+    voice_enabled: 1,          // 语音开关：0关 1开
+    joystick_sensitivity: 5,   // 摇杆灵敏度 1-10
+    skill_cast_mode: 0,        // 技能施放方式：0点击 1拖动瞄准
+    auto_attack: 0,            // 自动普攻：0关 1开
+    target_lock_mode: 0,       // 目标锁定：0自动就近 1手动点选
+    dodge_mode: 0,             // 翻滚方式：0按钮 1摇杆快速双划
+    auto_pickup: 1,            // 自动拾取：0关 1开（默认开）
+    show_damage_numbers: 1,    // 显示伤害数字：0关 1开（默认开）
+    other_player_effects: 2,   // 他人技能特效：0隐藏 1简化 2完整（默认完整）
+    tutorial_skipped: 0,       // 引导已跳过标记：只读展示（后端只升不降）
+};
+
+/** V6 UI设置对象类型（17项，键名与后端接口 JSON 一致） */
+export type UISettings = typeof SettingsDefaults;

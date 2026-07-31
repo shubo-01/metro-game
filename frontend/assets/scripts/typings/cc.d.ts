@@ -85,6 +85,7 @@ declare module 'cc' {
         enabled: boolean;
         schedule(callback: Function, interval?: number, repeat?: number, delay?: number): void;
         scheduleOnce(callback: Function, delay?: number): void;
+        unschedule(callback: Function): void;
         unscheduleAllCallbacks(): void;
         getComponent<T>(classConstructor: new (...args: any[]) => T): T | null;
     }
@@ -141,6 +142,18 @@ declare module 'cc' {
 
     export class Toggle extends Component {
         isChecked: boolean;
+    }
+
+    /** 滑动条（V6 设置面板音量/灵敏度用）：progress 取值 0~1 */
+    export class Slider extends Component {
+        progress: number;
+        direction: number;
+        handle: any;
+    }
+
+    /** 透明度组件（V6 浮字伤害渐隐/面板叠底用）：opacity 取值 0~255 */
+    export class UIOpacity extends Component {
+        opacity: number;
     }
 
     export class Button extends Component {

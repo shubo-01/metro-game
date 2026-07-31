@@ -83,7 +83,8 @@ export class HttpClient {
      * - /shard/*         → 装备服务（端口 8009）神话碎片合成（旧体系，与 /shenwei/ 无关）
      * - /inherit/*       → 装备服务（端口 8009）神位继承（旧体系，与 /shenwei/ 无关）
      * - /trade/*         → 装备服务（端口 8009）交易系统
-     * - /inventory/*     → 装备服务（端口 8009）背包容量（腰带扩展）
+     * - /inventory/*     → 装备服务（端口 8009）背包容量（腰带扩展）+ V6 背包列表/物品使用
+     * - /shop/*          → 装备服务（端口 8009）V6 商店系统（列表/购买/出售）
      * - 其他              → 默认认证服务（端口 8001）
      */
     private static _getServiceBaseUrl(path: string): string {
@@ -109,7 +110,8 @@ export class HttpClient {
         }
         if (path.startsWith('/equipment/') || path.startsWith('/craft/')
             || path.startsWith('/shard/') || path.startsWith('/inherit/')
-            || path.startsWith('/trade/') || path.startsWith('/inventory/')) {
+            || path.startsWith('/trade/') || path.startsWith('/inventory/')
+            || path.startsWith('/shop/')) {
             return ServerConfig.DEV_EQUIPMENT_URL;
         }
         return HttpClient._baseUrl;

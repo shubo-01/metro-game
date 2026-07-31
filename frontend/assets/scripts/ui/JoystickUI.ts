@@ -23,6 +23,7 @@
 import { _decorator, Component, Node, Vec2, EventTouch } from 'cc';
 import { EventManager } from '../manager/EventManager';
 import { MapEvent } from '../common/Constants';
+import { TutorialUI } from './TutorialUI';
 
 const { ccclass, property } = _decorator;
 
@@ -54,9 +55,13 @@ export class JoystickUI extends Component {
         this.node.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
         this.node.on(Node.EventType.TOUCH_END, this._onTouchEnd, this);
         this.node.on(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this);
+        // V6 评审修复：注册为引导第2步高亮目标 joystick（仅注册，不动摇杆逻辑）
+        TutorialUI.registerTarget('joystick', this.node);
     }
 
     onDestroy() {
+        // V6 评审修复：销毁时注销引导目标，防 TutorialUI 持有失效节点
+        TutorialUI.unregisterTarget('joystick');
         this.node.off(Node.EventType.TOUCH_START, this._onTouchStart, this);
         this.node.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this);
         this.node.off(Node.EventType.TOUCH_END, this._onTouchEnd, this);

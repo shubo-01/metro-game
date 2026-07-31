@@ -20,13 +20,16 @@ import { HttpClient } from '../../net/HttpClient';
 import { PlayerManager } from '../../manager/PlayerManager';
 import { TokenManager } from '../../manager/TokenManager';
 import { EventManager, GameEvent } from '../../manager/EventManager';
-import { AOIConfig, SceneID, ThemeColor, MapConfig, MapEvent, BattleEvent, SamsaraEvent } from '../../common/Constants';
+import { AOIConfig, SceneID, ThemeColor, MapConfig, MapEvent, BattleEvent, SamsaraEvent, TutorialEvent } from '../../common/Constants';
 import {
     MapApi, ZoneInfoData, ZoneEnterData, GatherData, ZoneRect, ForbiddenArea, MoveRule,
     findNearestGatherPoint, GatherPointConfig, MapErrorText,
     ERR_MOVE_TOO_FAST, ERR_ZONE_ILLEGAL_POS, ERR_ZONE_NOT_FOUND, ERR_GATHER_IN_CD,
 } from '../../net/MapApi';
 import { SamsaraApi, ThunderCheckData } from '../../net/SamsaraApi';
+import { TutorialSystem } from '../../manager/TutorialSystem';
+import { SettingsStorage } from '../../manager/SettingsStorage';
+import { TutorialUI } from '../../ui/TutorialUI';
 import { HallUI } from './HallUI';
 import { PlayerEntity } from './PlayerEntity';
 import { NPCEntity } from './NPCEntity';
@@ -107,6 +110,9 @@ export class HallScene extends Component {
     private _nearGather: GatherPointConfig | null = null;   // 5米内最近采集点
     private _gathering: boolean = false;       // 采集读条/请求在途防重入
 
+    // ─── V6 营地出口引导标记节点（引导第4步 camp_exit 高亮/箭头目标） ───
+    private _campExitNode: Node | null = null;
+
     // 同步
     private _syncTimer: number = 0;
     private _moveSeq: number = 0;
@@ -175,9 +181,22 @@ export class HallScene extends Component {
         // ─── V5 天雷懒结算：登录首查（补算离线积欠）+ 定时轮询 ───
         this._thunderCheck(true);
         this.schedule(() => this._thunderCheck(false), THUNDER_CHECK_INTERVAL_S);
+
+        // ─── V6 新手引导状态机：拉状态，新角色（next_step>0）自动启动 ───
+        TutorialSystem.init(this._playerManager.playerId);
+
+        // ─── V6 设置同步：登录后拉服务端设置合并本地（本地优先策略） ───
+        SettingsStorage.syncFromServer(this._playerManager.playerId)
+            .catch(() => { /* 网络异常静默：用本地/默认值兜底，重登会再拉 */ });
     }
 
     onDestroy() {
+        // V6 引导状态机停机（解绑它自己的事件监听）+ 注销引导目标节点
+        TutorialSystem.shutdown();
+        TutorialUI.unregisterTarget('npc_elder');
+        // V6 评审修复：营地出口标记也要注销（节点随场景销毁，不手动 destroy）
+        TutorialUI.unregisterTarget('camp_exit');
+        this._campExitNode = null;
         EventManager.offAll(this);
         this.unscheduleAllCallbacks();
         this._wsClient.disconnect();
@@ -338,6 +357,11 @@ export class HallScene extends Component {
                 this._interactNPC(npcCfg);
             }, this);
 
+            // V6 引导第1步高亮目标：张真人(id=1)代任"营地长老"（假设值，可配）
+            if (npcCfg.id === 1) {
+                TutorialUI.registerTarget('npc_elder', npcNode);
+            }
+
             this.entityContainer?.addChild(npcNode);
         }
     }
@@ -367,6 +391,8 @@ export class HallScene extends Component {
 
             if (res.code === 0) {
                 this.hallUI?.showNPCDialog(npcCfg.name, res.data);
+                // V6 广播 NPC 对话完成（消费者 TutorialSystem 判定第1步"和长老对话"）
+                EventManager.emit(TutorialEvent.NPC_TALKED, npcCfg.id);
             }
         } catch {
             this._showToast('交互失败');
@@ -518,6 +544,30 @@ export class HallScene extends Component {
         this._zones = data.zones || [];
         this._forbidden = data.forbidden_areas || [];
         if (data.move_rule) this._moveRule = data.move_rule;
+        // V6 评审修复：分区数据到达后创建营地出口引导标记（camp_exit 目标）
+        this._ensureCampExitMarker();
+    }
+
+    /**
+     * 创建营地出口引导标记节点并注册为 camp_exit（V6 评审修复）：
+     * 场景里没有现成的"营地出口"节点，这里用分区数据（zone_id=1 营地矩形）
+     * 在东边界中点创建一个轻量空节点当出口指示位（营地嵌在原野内，
+     * 任意方向都能出去，选东边界为假设值可配）；
+     * 分区数据拉不到时不创建，保持 TutorialUI "箭头自动隐藏只显文案"的降级行为
+     */
+    private _ensureCampExitMarker() {
+        if (this._campExitNode) return;   // 已创建过（分区配置重拉不重复建）
+        const camp = this._zones.find(z => z.zone_id === 1);
+        if (!camp || !this.entityContainer) return;
+        // 米坐标 → 像素：东边界 x_max，垂直中点 (y_min+y_max)/2
+        const px = camp.x_max * MapConfig.PIXELS_PER_METER;
+        const py = (camp.y_min + camp.y_max) / 2 * MapConfig.PIXELS_PER_METER;
+        const marker = new Node('CampExitMarker');
+        marker.setPosition(px, py, 0);
+        this.entityContainer.addChild(marker);
+        this._campExitNode = marker;
+        // 注册为引导第4步"出营地探索"的高亮/箭头目标（销毁时在 onDestroy 注销）
+        TutorialUI.registerTarget('camp_exit', marker);
     }
 
     /** 翻滚（CombatHUDUI 翻滚按钮广播）：按最近朝向瞬移3米（硬直期间不可翻滚） */

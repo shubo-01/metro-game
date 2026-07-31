@@ -37,6 +37,8 @@ import { CharacterApi } from '../net/CharacterApi';
 import { PlayerManager } from '../manager/PlayerManager';
 import { EventManager } from '../manager/EventManager';
 import { BattleEvent } from '../common/Constants';
+import { PanelManager } from '../manager/PanelManager';
+import { FloatingDamageText, DamageTextType, DamageElement } from './FloatingDamageText';
 
 const { ccclass, property } = _decorator;
 
@@ -71,9 +73,12 @@ export class CombatHUDUI extends Component {
     @property({}) targetId: number = 0;
 
     @property(Node) rollBtn: Node | null = null;          // 翻滚按钮（含子节点 CDLabel）
-    @property(Label) floatLabel: Label | null = null;     // 浮字伤害
+    @property(Label) floatLabel: Label | null = null;     // 浮字伤害（旧版单标签，V6 降级备用）
     @property(Label) staggerLabel: Label | null = null;   // 硬直提示
     @property(Label) toastLabel: Label | null = null;     // 提示文字
+
+    /** V6 浮字伤害组件（对象池+颜色映射+字号公式，见 FloatingDamageText） */
+    @property(FloatingDamageText) damageText: FloatingDamageText | null = null;
 
     private _playerManager: PlayerManager = new PlayerManager();
     private _characterId: number = 0;
@@ -118,6 +123,9 @@ export class CombatHUDUI extends Component {
     onDestroy() {
         EventManager.offAll(this);
         this.unscheduleAllCallbacks();
+        // 【V6 评审修复】HUD 销毁时强制退出战斗模式，防止状态泄漏到下个场景
+        //（战斗模式下 PanelManager.openPanel 不自动关旧面板，PRD 7.1 例外条款）
+        PanelManager.setCombatMode(false);
     }
 
     update(dt: number) {
@@ -178,7 +186,17 @@ export class CombatHUDUI extends Component {
      * @param staggerS /combat/skill 响应新增的受击硬直秒数（旧数据无此字段传0）
      */
     applyHit(damage: number, staggerS: number) {
-        this.showDamage(damage);
+        // 【V6 接入选择：新组件优先，旧浮字降级保留】
+        // 编辑器绑了 damageText 就走 FloatingDamageText（对象池/颜色映射/
+        // 字号公式/伤害数字开关全都有）；没绑则降级走旧 showDamage 单标签，
+        // 保证旧场景（未重新搭节点）浮字链路不断——故选择"保留+新增"而非替换
+        if (this.damageText) {
+            // 自己受击：类型=自伤（红色），无五行；位置用组件原点（HUD局部坐标）
+            this.damageText.show(damage, DamageTextType.SelfHit, DamageElement.None,
+                this._hpMax, 0, 0, this._characterId);
+        } else {
+            this.showDamage(damage);
+        }
         if (staggerS > 0) {
             this._staggerRemain = staggerS;
             if (this.staggerLabel) {
@@ -270,9 +288,18 @@ export class CombatHUDUI extends Component {
         }
     }
 
-    /** 设置伤害结算目标（战斗流程锁定敌人时调用；传0清除目标） */
+    /**
+     * 设置伤害结算目标（战斗流程锁定敌人时调用；传 0 清除目标）。
+     * 【V6 评审修复：战斗模式接入点】锁定目标(>0)=进入战斗、清目标(0)=脱战，
+     * 同步切换 PanelManager 战斗模式（PRD 7.1：战斗中打开面板不自动关旧面板，
+     * 避免打断战斗操作）。选择依据：工程无独立"战斗开始/结束"事件，
+     * 而本 HUD 常驻大厅场景（onEnable 接入会导致全程战斗模式，默认行为失效），
+     * setTarget 是现有代码唯一语义化的进战/脱战切换点；正式战斗循环上线后
+     * 可改接真实战斗状态事件（假设值可配）
+     */
     setTarget(defenderId: number) {
         this.targetId = defenderId;
+        PanelManager.setCombatMode(defenderId > 0);
     }
 
     /**
